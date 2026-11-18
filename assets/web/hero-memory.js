@@ -237,7 +237,7 @@
     }
     return ta.parentElement;
   }
-  function hide() {
+  function hide() { return; // 不再隐藏网页输入框
     var c = containerOf();
     if (c) c.style.display = 'none';
     var ta = findTa();
@@ -263,12 +263,10 @@
     setTimeout(function () {
       var b = findSend();
       if (b && !b.disabled) b.click();
-      hide();
     }, 220);
     return 'ok';
   }
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 60); });
-  setInterval(hide, 3000);
+
 
   function vis(sel) {
     var e = document.querySelector(sel);
