@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,12 +8,16 @@ import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 const _bg = Color(0xFF151517);
+const _box = Color(0xFF2C2C2E);
+const _fg = Color(0xFFF9FAFB);
+const _hint = Color(0xFF8A8A8E);
+const _accent = Color(0xFF4D6BFE);
 
 /// 把打包进 App 的官方 chat-demo 静态站点，用本机回环 HTTP 服务跑起来。
 /// 这样页面有真正的 http 源，localStorage / IndexedDB 才能正常工作。
 class WebHost {
   HttpServer? _server;
-  Map<String, Uint8List> _cache = {};
+  final Map<String, Uint8List> _cache = {};
 
   String get origin => 'http://127.0.0.1:${_server!.port}';
 
@@ -24,7 +29,7 @@ class WebHost {
   Future<void> _handle(HttpRequest req) async {
     var path = req.uri.path;
     if (path == '/' || path.isEmpty) path = '/index.html';
-    final asset = 'assets/web${path}';
+    final asset = 'assets/web$path';
     Uint8List? bytes = _cache[asset];
     if (bytes == null) {
       try {
@@ -32,7 +37,6 @@ class WebHost {
         bytes = d.buffer.asUint8List(d.offsetInBytes, d.lengthInBytes);
         if (bytes.length < 2 * 1024 * 1024) _cache[asset] = bytes;
       } catch (_) {
-        // 前端路由：找不到就回 index.html
         try {
           final d = await rootBundle.load('assets/web/index.html');
           bytes = d.buffer.asUint8List(d.offsetInBytes, d.lengthInBytes);
@@ -85,8 +89,10 @@ class HeroApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'hero',
-        theme: ThemeData(brightness: Brightness.dark,
-            scaffoldBackgroundColor: _bg, canvasColor: _bg),
+        theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: _bg,
+            canvasColor: _bg),
         home: const Shell(),
       );
 }
@@ -99,13 +105,23 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   final _host = WebHost();
+  final _text = TextEditingController();
+  final _focus = FocusNode();
   WebViewController? _web;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _text.addListener(() => setState(() {}));
     _boot();
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
   }
 
   Future<void> _boot() async {
@@ -115,6 +131,7 @@ class _ShellState extends State<Shell> {
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(_bg)
         ..setNavigationDelegate(NavigationDelegate(
+          onPageFinished: (_) => _takeOverInput(),
           onWebResourceError: (e) {
             if (!mounted) return;
             if (e.isForMainFrame ?? true) setState(() => _error = e.description);
@@ -128,27 +145,121 @@ class _ShellState extends State<Shell> {
     }
   }
 
+  Future<void> _takeOverInput() async {
+    final c = _web;
+    if (c == null) return;
+    try {
+      await c.runJavaScript('window.heroInput&&window.heroInput.hide();');
+    } catch (_) {}
+  }
+
+  Future<void> _send() async {
+    final t = _text.text.trim();
+    final c = _web;
+    if (t.isEmpty || c == null) return;
+    _text.clear();
+    try {
+      await c.runJavaScript('window.heroInput&&window.heroInput.send(${jsonEncode(t)});');
+    } catch (_) {}
+    _focus.requestFocus();
+    await _takeOverInput();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: false,
-        child: _error != null
-            ? Center(
-                child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text('页面没起来：$_error',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14)),
-              ))
-            : (_web == null
-                ? const Center(
-                    child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white38)))
-                : WebViewWidget(controller: _web!)),
+        child: Column(
+          children: [
+            Expanded(
+              child: _error != null
+                  ? Center(
+                      child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('页面没起来：$_error',
+                          style:
+                              const TextStyle(color: Colors.white70, fontSize: 14)),
+                    ))
+                  : (_web == null
+                      ? const Center(
+                          child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white38)))
+                      : WebViewWidget(controller: _web!)),
+            ),
+            _Composer(
+              controller: _text,
+              focus: _focus,
+              onSend: _send,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Composer extends StatelessWidget {
+  const _Composer(
+      {required this.controller, required this.focus, required this.onSend});
+  final TextEditingController controller;
+  final FocusNode focus;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final has = controller.text.trim().isNotEmpty;
+    return Container(
+      color: _bg,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: _box,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: controller,
+                focusNode: focus,
+                minLines: 1,
+                maxLines: 5,
+                cursorColor: _accent,
+                style: const TextStyle(color: _fg, fontSize: 16, height: 1.5),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: '请输入消息',
+                  hintStyle: TextStyle(color: _hint, fontSize: 16),
+                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                ),
+                onSubmitted: (_) => onSend(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: has ? onSend : null,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: has ? _accent : _box,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.arrow_upward, size: 20, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }
