@@ -267,7 +267,37 @@
     }, 220);
     return 'ok';
   }
-  document.addEventListener('DOMContentLoaded', hide);
-  setInterval(hide, 1500);
-  window.heroInput = { hide: hide, send: send };
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 60); });
+  setInterval(hide, 3000);
+
+  function vis(sel) {
+    var e = document.querySelector(sel);
+    return !!e && e.getBoundingClientRect().height > 10;
+  }
+  function state() {
+    try {
+      var ov = vis('[class*="overlay-"]') || vis('[class*="mask-"]') || vis('[class*="drawer-ac14ac"]');
+      var editing = vis('[class*="textarea-ed6f47"]');
+      return (ov || editing) ? '0' : '1';
+    } catch (e) { return '1'; }
+  }
+  var last = null, timer = null;
+  function push() {
+    var s = state();
+    if (s === last) return;
+    last = s;
+    try { if (window.HeroUI && window.HeroUI.postMessage) window.HeroUI.postMessage(s); } catch (e) {}
+  }
+  function watch() {
+    if (watch.done) return;
+    watch.done = true;
+    var obs = new MutationObserver(function () {
+      if (timer) return;
+      timer = setTimeout(function () { timer = null; push(); }, 160);
+    });
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true });
+    setTimeout(push, 80);
+  }
+  window.addEventListener('load', function(){ setTimeout(watch, 200); });
+  window.heroInput = { hide: hide, send: send, state: state, watch: watch };
 })();
