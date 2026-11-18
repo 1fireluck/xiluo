@@ -15,26 +15,23 @@ workflows:
           flutter pub add webview_flutter
       - name: 放入界面
         script: |
-          cp ../seed/main.dart lib/main.dart
-      - name: 放入网页
-        script: |
-          mkdir -p assets
-          cp -R ../assets/web assets/web
+          test -f seed/main.dart
+          cp seed/main.dart lib/main.dart
       - name: 登记资源目录
         script: |
           python3 - <<'PY'
-          import io, pathlib
+          import pathlib
           pub = pathlib.Path('pubspec.yaml')
           text = pub.read_text(encoding='utf-8')
-          dirs = [l.strip() for l in pathlib.Path('../seed/webdirs.txt').read_text(encoding='utf-8').splitlines() if l.strip()]
-          block = '\n'.join('    - %s/' % d for d in dirs)
+          dirs = [l.strip() for l in pathlib.Path('seed/webdirs.txt').read_text(encoding='utf-8').splitlines() if l.strip()]
+          block = '\n'.join('    - assets/%s/' % d for d in dirs)
           anchor = '  uses-material-design: true'
           if anchor in text:
               text = text.replace(anchor, anchor + '\n  assets:\n' + block, 1)
           else:
               text += '\nflutter:\n  assets:\n' + block + '\n'
           pub.write_text(text, encoding='utf-8')
-          print(text[-600:])
+          print(text[-800:])
           PY
       - name: 显示名与权限
         script: |
@@ -44,7 +41,7 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :NSAllowsLocalNetworking bool true" ios/Runner/Info.plist || true
       - name: 换图标
         script: |
-          ICON=../assets/icon.png
+          ICON=assets/icon.png
           if [ -f "$ICON" ]; then
             DEST=ios/Runner/Assets.xcassets/AppIcon.appiconset
             rm -rf "$DEST" && mkdir -p "$DEST"
