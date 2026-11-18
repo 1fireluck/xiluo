@@ -186,34 +186,21 @@ class _ShellState extends State<Shell> {
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
-        child: Column(
-          children: [
-            Expanded(
-              child: _error != null
-                  ? Center(
-                      child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text('页面没起来：$_error',
-                          style:
-                              const TextStyle(color: Colors.white70, fontSize: 14)),
-                    ))
-                  : (_web == null
-                      ? const Center(
-                          child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white38)))
-                      : WebViewWidget(controller: _web!)),
-            ),
-            if (_showComposer)
-              _Composer(
-                controller: _text,
-                focus: _focus,
-                onSend: _send,
-              ),
-          ],
-        ),
+        child: _error != null
+            ? Center(
+                child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('页面没起来：$_error',
+                    style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              ))
+            : (_web == null
+                ? const Center(
+                    child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white38)))
+                : WebViewWidget(controller: _web!)),
       ),
     );
   }
