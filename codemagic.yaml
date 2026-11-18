@@ -4,32 +4,69 @@ workflows:
     max_build_duration: 60
     environment:
       flutter: 3.24.5
+      xcode: latest
+      cocoapods: default
     scripts:
       - name: 生成工程
         script: |
-          flutter create --org com.fireluck --project-name xiluo --platforms=ios -t app .
+          flutter create --org com.fireluck --project-name xiluo --platforms=ios .
+      - name: 加依赖
+        script: |
+          flutter pub add webview_flutter
       - name: 放入界面
         script: |
-          cp seed/main.dart lib/main.dart
-          flutter pub get
-      - name: 显示名
+          cp ../seed/main.dart lib/main.dart
+      - name: 放入网页
+        script: |
+          mkdir -p assets
+          cp -R ../assets/web assets/web
+      - name: 登记资源目录
+        script: |
+          python3 - <<'PY'
+          import io, pathlib
+          pub = pathlib.Path('pubspec.yaml')
+          text = pub.read_text(encoding='utf-8')
+          dirs = [l.strip() for l in pathlib.Path('../seed/webdirs.txt').read_text(encoding='utf-8').splitlines() if l.strip()]
+          block = '\n'.join('    - %s/' % d for d in dirs)
+          anchor = '  uses-material-design: true'
+          if anchor in text:
+              text = text.replace(anchor, anchor + '\n  assets:\n' + block, 1)
+          else:
+              text += '\nflutter:\n  assets:\n' + block + '\n'
+          pub.write_text(text, encoding='utf-8')
+          print(text[-600:])
+          PY
+      - name: 显示名与权限
         script: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName hero" ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string hero" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" ios/Runner/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" ios/Runner/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Add :NSAllowsLocalNetworking bool true" ios/Runner/Info.plist || true
       - name: 换图标
         script: |
-          cd ios/Runner/Assets.xcassets/AppIcon.appiconset
-          rm -f *.png
-          cp "$CM_BUILD_DIR/assets/icon.png" Icon-App-1024x1024@1x.png
-          cat > Contents.json <<'EOF'
-          { "images" : [ { "filename" : "Icon-App-1024x1024@1x.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" } ], "info" : { "author" : "xcode", "version" : 1 } }
-          EOF
+          ICON=../assets/icon.png
+          if [ -f "$ICON" ]; then
+            DEST=ios/Runner/Assets.xcassets/AppIcon.appiconset
+            rm -rf "$DEST" && mkdir -p "$DEST"
+            cp "$ICON" "$DEST/Icon-App-1024x1024@1x.png"
+            cat > "$DEST/Contents.json" <<'JSON'
+          {
+            "images" : [
+              { "filename" : "Icon-App-1024x1024@1x.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" }
+            ],
+            "info" : { "author" : "xcode", "version" : 1 }
+          }
+          JSON
+          fi
       - name: 编译
         script: |
           flutter build ios --release --no-codesign
       - name: 打包
         script: |
-          mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
+          mkdir -p build_out/Payload
+          cp -R build/ios/iphoneos/Runner.app build_out/Payload/
+          cd build_out
           zip -qr xiluo.ipa Payload
+          ls -la
     artifacts:
-      - xiluo.ipa
+      - build_out/xiluo.ipa

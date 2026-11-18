@@ -1,0 +1,7 @@
+web
+web/static
+web/static/css
+web/static/js
+web/static/media
+web/static/css/async
+web/static/js/async
