@@ -172,3 +172,37 @@
     add: function (text) { var a = load(); a.push({ t: Date.now(), text: text }); save(a); }
   };
 })();
+
+/* ---- 顺手做两件外观上的事 ---- */
+(function () {
+  var TARGET = '内容由 AI 生成';
+  function hideCaveat() {
+    var all = document.querySelectorAll('div,span,p');
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      if (e.children.length === 0) {
+        var t = (e.textContent || '').trim();
+        if (t.indexOf(TARGET) === 0) {
+          if (e.style.display !== 'none') {
+            e.style.setProperty('display', 'none', 'important');
+          }
+        }
+      }
+    }
+  }
+  var st = document.createElement('style');
+  st.textContent = [
+    /* 底部提示条藏掉后，把输入区往下压到底 */
+    '.caveat-_1f155{display:none!important}',
+    '[class*="caveat-"]{display:none!important}'
+  ].join('\n');
+  (document.head || document.documentElement).appendChild(st);
+
+  hideCaveat();
+  var ob = new MutationObserver(function () { hideCaveat(); });
+  document.addEventListener('DOMContentLoaded', function () { hideCaveat(); });
+  setTimeout(function () {
+    ob.observe(document.body, { childList: true, subtree: true });
+    hideCaveat();
+  }, 500);
+})();
