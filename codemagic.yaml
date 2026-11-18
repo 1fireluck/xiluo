@@ -12,9 +12,17 @@ workflows:
         script: |
           cp seed/main.dart lib/main.dart
           flutter pub get
-      - name: 中文显示名
+      - name: 显示名
         script: |
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 希罗" ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 希罗" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName hero" ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string hero" ios/Runner/Info.plist
+      - name: 换图标
+        script: |
+          cd ios/Runner/Assets.xcassets/AppIcon.appiconset
+          rm -f *.png
+          cp "$CM_BUILD_DIR/assets/icon.png" Icon-App-1024x1024@1x.png
+          cat > Contents.json <<'EOF'
+          { "images" : [ { "filename" : "Icon-App-1024x1024@1x.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" } ], "info" : { "author" : "xcode", "version" : 1 } }
+          EOF
       - name: 编译
         script: |
           flutter build ios --release --no-codesign
