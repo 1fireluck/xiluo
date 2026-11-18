@@ -610,7 +610,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await send();
   }
 
-  InlineSpan _rich(String s) {
+  TextSpan _rich(String s) {
     // 极简 markdown：```代码块``` / **粗体** / 行内 `代码` / 标题 / 列表
     final spans = <InlineSpan>[];
     final blocks = s.split('```');
