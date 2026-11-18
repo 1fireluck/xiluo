@@ -291,12 +291,11 @@
   function watch() {
     if (watch.done) return;
     watch.done = true;
-    var obs = new MutationObserver(function () {
-      if (timer) return;
-      timer = setTimeout(function () { timer = null; push(); }, 160);
-    });
-    obs.observe(document.body, { childList: true, subtree: true, attributes: true });
-    setTimeout(push, 80);
+    var obs = new MutationObserver(function () { push(); });
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class','style'] });
+    document.addEventListener('click', function(){ push(); setTimeout(push, 30); setTimeout(push, 120); }, true);
+    setInterval(push, 800);
+    setTimeout(push, 60);
   }
   window.addEventListener('load', function(){ setTimeout(watch, 200); });
   window.heroInput = { hide: hide, send: send, state: state, watch: watch };
