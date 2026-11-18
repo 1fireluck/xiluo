@@ -224,3 +224,50 @@
     add: function (text) { var a = loadArr(LS_MEM); a.push({ t: Date.now(), text: text }); saveArr(LS_MEM, a); }
   };
 })();
+
+// ---------- 输入框接管：页面里的输入框藏起来，改用 App 自己的 ----------
+(function () {
+  function findTa() { return document.querySelector('textarea'); }
+  function containerOf() {
+    var ta = findTa(); if (!ta) return null;
+    var el = ta;
+    for (var i = 0; i < 5 && el; i++) {
+      el = el.parentElement;
+      if (el && /textareaWrapper/.test(String(el.className))) return el;
+    }
+    return ta.parentElement;
+  }
+  function hide() {
+    var c = containerOf();
+    if (c) c.style.display = 'none';
+    var ta = findTa();
+    if (ta && document.activeElement === ta) ta.blur();
+    return c ? 'hidden' : 'none';
+  }
+  function findSend() {
+    var b = document.querySelector('button[aria-label="发送"]');
+    if (b) return b;
+    var all = document.querySelectorAll('button');
+    for (var i = 0; i < all.length; i++) {
+      if (/sendButton/.test(String(all[i].className))) return all[i];
+    }
+    return null;
+  }
+  function send(text) {
+    var ta = findTa();
+    if (!ta) return 'no-ta';
+    var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(ta, text || '');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.dispatchEvent(new Event('change', { bubbles: true }));
+    setTimeout(function () {
+      var b = findSend();
+      if (b && !b.disabled) b.click();
+      hide();
+    }, 220);
+    return 'ok';
+  }
+  document.addEventListener('DOMContentLoaded', hide);
+  setInterval(hide, 1500);
+  window.heroInput = { hide: hide, send: send };
+})();
