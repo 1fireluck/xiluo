@@ -137,7 +137,7 @@ class _ShellState extends State<Shell> {
             if (e.isForMainFrame ?? true) setState(() => _error = e.description);
           },
         ))
-        ..loadRequest(Uri.parse(_host.origin));
+        ..loadRequest(Uri.parse('${_host.origin}/?v=${DateTime.now().millisecondsSinceEpoch}'));
       if (!mounted) return;
       setState(() => _web = c);
     } catch (e) {
