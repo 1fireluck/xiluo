@@ -133,6 +133,7 @@ class _ShellState extends State<Shell> {
       final c = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(_bg)
+        ..addJavaScriptChannel('HeroUI', onMessageReceived: _onHeroUI)
         ..setNavigationDelegate(NavigationDelegate(
           onPageFinished: (_) => _takeOverInput(),
           onWebResourceError: (e) {
@@ -155,21 +156,15 @@ class _ShellState extends State<Shell> {
       await c.runJavaScript('window.heroInput&&window.heroInput.hide();');
     } catch (_) {}
     _tick?.cancel();
-    _tick = Timer.periodic(const Duration(milliseconds: 500), (_) async {
-      try {
-        final r = await c.runJavaScriptReturningResult(
-            "(function(){try{"
-            "function vis(sel){var e=document.querySelector(sel);return !!e && e.getBoundingClientRect().height>10;}"
-            "var ov=vis('[class*=\"overlay-\"]')||vis('[class*=\"mask-\"]')||vis('[class*=\"drawer-ac14ac\"]');"
-            "var editing=vis('[class*=\"textarea-ed6f47\"]');"
-            "return (ov||editing)?'0':'1';"
-            "}catch(e){return '1'}})()");
-        final s = r.toString().replaceAll('"', '');
-        if (!mounted) return;
-        final want = s == '1';
-        if (want != _showComposer) setState(() => _showComposer = want);
-      } catch (_) {}
-    });
+    try {
+      await c.runJavaScript('window.heroInput&&window.heroInput.watch();');
+    } catch (_) {}
+  }
+
+  void _onHeroUI(JavaScriptMessage m) {
+    if (!mounted) return;
+    final want = m.message == '1';
+    if (want != _showComposer) setState(() => _showComposer = want);
   }
 
   Future<void> _send() async {
