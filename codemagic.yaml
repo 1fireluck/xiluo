@@ -7,7 +7,7 @@ workflows:
     scripts:
       - name: 生成工程
         script: |
-          flutter create --org com.fireluck --project-name xiluo -a ios -t app .
+          flutter create --org com.fireluck --project-name xiluo --platforms=ios -t app .
       - name: 放入界面
         script: |
           cp seed/main.dart lib/main.dart
