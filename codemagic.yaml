@@ -10,6 +10,37 @@ workflows:
       - name: 生成工程
         script: |
           flutter create --org com.fireluck --project-name xiluo --platforms=ios .
+      - name: 去掉键盘上方的表单条
+        script: |
+          cat > ios/Runner/AppDelegate.swift <<'SWIFT'
+          import Flutter
+          import UIKit
+          import WebKit
+
+          @main
+          @objc class AppDelegate: FlutterAppDelegate {
+            override func application(
+              _ application: UIApplication,
+              didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+            ) -> Bool {
+              GeneratedPluginRegistrant.register(with: self)
+              Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+                DispatchQueue.main.async { self.strip(in: UIApplication.shared.windows) }
+              }
+              return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+            }
+
+            private func strip(in views: [UIView]) {
+              for v in views {
+                if let web = v as? WKWebView {
+                  web.inputAssistantItem.leadingBarButtonGroups = []
+                  web.inputAssistantItem.trailingBarButtonGroups = []
+                }
+                if !v.subviews.isEmpty { strip(in: v.subviews) }
+              }
+            }
+          }
+          SWIFT
       - name: 加依赖
         script: |
           flutter pub add webview_flutter
