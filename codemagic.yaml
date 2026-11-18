@@ -1,0 +1,28 @@
+workflows:
+  ios-unsigned:
+    name: iOS 未签名包
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.24.5
+    scripts:
+      - name: 生成工程
+        script: |
+          flutter create --org com.fireluck --project-name xiluo -a ios -t app .
+      - name: 放入界面
+        script: |
+          cp seed/main.dart lib/main.dart
+          flutter pub get
+      - name: 中文显示名
+        script: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 希罗" ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 希罗" ios/Runner/Info.plist
+      - name: 编译
+        script: |
+          flutter build ios --release --no-codesign
+      - name: 打包
+        script: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr xiluo.ipa Payload
+    artifacts:
+      - xiluo.ipa
