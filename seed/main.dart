@@ -109,6 +109,8 @@ class _ShellState extends State<Shell> {
   final _focus = FocusNode();
   WebViewController? _web;
   String? _error;
+  Timer? _tick;
+  bool _showComposer = true;
 
   @override
   void initState() {
@@ -119,6 +121,7 @@ class _ShellState extends State<Shell> {
 
   @override
   void dispose() {
+    _tick?.cancel();
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -151,6 +154,23 @@ class _ShellState extends State<Shell> {
     try {
       await c.runJavaScript('window.heroInput&&window.heroInput.hide();');
     } catch (_) {}
+    _tick?.cancel();
+    _tick = Timer.periodic(const Duration(milliseconds: 500), (_) async {
+      try {
+        final r = await c.runJavaScriptReturningResult(
+            "(function(){try{"
+            "var ov=document.querySelector('[class*=\"overlay-\"],[class*=\"mask-\"]');"
+            "var vis=!!ov && ov.getBoundingClientRect().height>10;"
+            "var ta=document.querySelector('[class*=\"textarea-ed6f47\"]');"
+            "var editing=!!ta && ta.getBoundingClientRect().height>10;"
+            "return (vis||editing)?'0':'1';"
+            "}catch(e){return '1'}})()");
+        final s = r.toString().replaceAll('"', '');
+        if (!mounted) return;
+        final want = s == '1';
+        if (want != _showComposer) setState(() => _showComposer = want);
+      } catch (_) {}
+    });
   }
 
   Future<void> _send() async {
@@ -171,7 +191,7 @@ class _ShellState extends State<Shell> {
       backgroundColor: _bg,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
             Expanded(
@@ -192,11 +212,12 @@ class _ShellState extends State<Shell> {
                                   strokeWidth: 2, color: Colors.white38)))
                       : WebViewWidget(controller: _web!)),
             ),
-            _Composer(
-              controller: _text,
-              focus: _focus,
-              onSend: _send,
-            ),
+            if (_showComposer)
+              _Composer(
+                controller: _text,
+                focus: _focus,
+                onSend: _send,
+              ),
           ],
         ),
       ),
