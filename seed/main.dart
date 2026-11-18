@@ -159,11 +159,10 @@ class _ShellState extends State<Shell> {
       try {
         final r = await c.runJavaScriptReturningResult(
             "(function(){try{"
-            "var ov=document.querySelector('[class*=\"overlay-\"],[class*=\"mask-\"]');"
-            "var vis=!!ov && ov.getBoundingClientRect().height>10;"
-            "var ta=document.querySelector('[class*=\"textarea-ed6f47\"]');"
-            "var editing=!!ta && ta.getBoundingClientRect().height>10;"
-            "return (vis||editing)?'0':'1';"
+            "function vis(sel){var e=document.querySelector(sel);return !!e && e.getBoundingClientRect().height>10;}"
+            "var ov=vis('[class*=\"overlay-\"]')||vis('[class*=\"mask-\"]')||vis('[class*=\"drawer-ac14ac\"]');"
+            "var editing=vis('[class*=\"textarea-ed6f47\"]');"
+            "return (ov||editing)?'0':'1';"
             "}catch(e){return '1'}})()");
         final s = r.toString().replaceAll('"', '');
         if (!mounted) return;
@@ -238,17 +237,17 @@ class _Composer extends StatelessWidget {
     return Container(
       color: _bg,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: _box,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _box,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
               child: TextField(
                 controller: controller,
                 focusNode: focus,
@@ -259,28 +258,34 @@ class _Composer extends StatelessWidget {
                 decoration: const InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  hintText: '请输入消息',
+                  hintText: '发消息',
                   hintStyle: TextStyle(color: _hint, fontSize: 16),
                   contentPadding: EdgeInsets.symmetric(vertical: 14),
                 ),
                 onSubmitted: (_) => onSend(),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: has ? onSend : null,
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: has ? _accent : _box,
-                shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6, left: 6),
+              child: GestureDetector(
+                onTap: has ? onSend : null,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: has ? _accent : _box,
+                    shape: BoxShape.circle,
+                    border: has
+                        ? null
+                        : Border.all(color: Colors.white.withOpacity(0.10)),
+                  ),
+                  child: Icon(Icons.arrow_upward,
+                      size: 19, color: has ? Colors.white : _hint),
+                ),
               ),
-              child: const Icon(Icons.arrow_upward, size: 20, color: Colors.white),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
