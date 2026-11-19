@@ -713,3 +713,43 @@ window.__topLoaded = true;
   };
 })();
 window.__endLoaded = true;
+
+
+/* ================= heroDiag: 把真机上的情况发回电脑 ================= */
+(function () {
+  if (window.heroDiag) return;
+  var URL = 'http://192.168.71.7:8094/diag';
+  var buf = [];
+  function send(tag, extra) {
+    try {
+      var payload = {
+        tag: tag,
+        ua: navigator.userAgent.slice(0, 60),
+        trim: window.__heroTrim || null,
+        msgs: document.querySelectorAll('[class*=message-]').length,
+        body: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 160),
+        extra: extra || null,
+        at: new Date().toISOString()
+      };
+      var x = new XMLHttpRequest();
+      x.open('POST', URL, true);
+      x.setRequestHeader('Content-Type', 'application/json');
+      x.send(JSON.stringify(payload));
+    } catch (e) {}
+  }
+  window.heroDiag = { send: send };
+  window.addEventListener('error', function (ev) {
+    buf.push(String(ev.message) + ' @' + (ev.filename || '') + ':' + (ev.lineno || ''));
+    send('error', buf.slice(-4));
+  });
+  window.addEventListener('unhandledrejection', function (ev) {
+    send('reject', String((ev.reason && ev.reason.message) || ev.reason));
+  });
+  var n = 0;
+  setTimeout(function () { send('boot'); }, 3000);
+  var iv = setInterval(function () {
+    n++;
+    if (n <= 20) send('tick');
+    else clearInterval(iv);
+  }, 5000);
+})();
