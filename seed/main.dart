@@ -110,6 +110,7 @@ class _ShellState extends State<Shell> {
   WebViewController? _web;
   String? _error;
   Timer? _tick;
+  Timer? _slide;
   bool _drawerOpen = false;
 
   @override
@@ -122,6 +123,7 @@ class _ShellState extends State<Shell> {
   @override
   void dispose() {
     _tick?.cancel();
+    _slide?.cancel();
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -156,6 +158,7 @@ class _ShellState extends State<Shell> {
       await c.runJavaScript('window.heroInput&&window.heroInput.hide();');
     } catch (_) {}
     _tick?.cancel();
+    _slide?.cancel();
     try {
       await c.runJavaScript('window.heroInput&&window.heroInput.watch();');
     } catch (_) {}
@@ -164,7 +167,17 @@ class _ShellState extends State<Shell> {
   void _onHeroUI(JavaScriptMessage m) {
     if (!mounted) return;
     final open = m.message == '0';
-    if (open != _drawerOpen) setState(() => _drawerOpen = open);
+    if (open == _drawerOpen) return;
+    _slide?.cancel();
+    if (open) {
+      // 让页面先动一小会儿，输入框再跟上
+      _slide = Timer(const Duration(milliseconds: 110), () {
+        if (!mounted) return;
+        setState(() => _drawerOpen = true);
+      });
+    } else {
+      setState(() => _drawerOpen = false);
+    }
   }
 
   Future<void> _send() async {
