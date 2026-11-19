@@ -599,6 +599,7 @@ window.__topLoaded = true;
   var full = Object.create(null);   // id -> 完整 messages
   var lastId = null;
   var pendingPut = false;
+  var meta = Object.create(null);   // id -> {keep, parent} 用于写回时恢复 parent 链
   var KEY = function (id) { return 'hero.win.' + id; };
   function win(id) { var v = parseInt(localStorage.getItem(KEY(id)) || '', 10); return isNaN(v) ? DEFAULT_WIN : v; }
 
@@ -640,8 +641,17 @@ window.__topLoaded = true;
           if (total > win(id)) {
             full[id] = s.messages.slice();
             var cut = s.messages.slice(total - win(id));
+            var cutKeep = total - win(id);
+            if (cut.length && cut[0]) {
+              meta[id] = { keep: cutKeep, parent: cut[0].parent_id, root: s.rootMessageId };
+              cut[0] = Object.assign({}, cut[0], { parent_id: null });
+            }
             // 只能改 result 对象本身
             s.messages = cut;
+            s.rootMessageId = cut[0].id;
+            if (s.currentMessageId && !cut.some(function (m) { return m.id === s.currentMessageId; })) {
+              s.currentMessageId = cut[cut.length - 1].id;
+            }
             window.__heroTrim = { id: id, total: total, shown: cut.length };
             setTimeout(paintBanner, 0);
           } else if (full[id] && full[id].length > total) {
@@ -657,6 +667,10 @@ window.__topLoaded = true;
           var keep = full[v.id].length - v.messages.length;
           if (keep > 0) {
             var merged = full[v.id].slice(0, keep).concat(v.messages);
+            if (meta[v.id] && merged[meta[v.id].keep]) {
+              merged[meta[v.id].keep] = Object.assign({}, merged[meta[v.id].keep], { parent_id: meta[v.id].parent });
+              if (meta[v.id].root) v.rootMessageId = meta[v.id].root;
+            }
             full[v.id] = merged;
             v = Object.assign({}, v, { messages: merged });
             arguments[0] = v;
