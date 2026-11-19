@@ -422,7 +422,7 @@
       let moved=0;
       for(const it of items){
         if(done.indexOf(it.id)>=0) continue;
-        if(moved>=3) break;
+        if(moved>=25) break;
         try{
           const r=await fetch(it.file,{cache:'no-store'});
           if(!r.ok) continue;
@@ -431,7 +431,7 @@
           done.push(it.id);
           localStorage.setItem('hero.seeded.v2', done.join(','));
           moved++;
-          await new Promise(r=>setTimeout(r,250));
+          await new Promise(r=>setTimeout(r,120));
           console.log('[hero] 搬进来：'+it.title);
           try{ if(window.HeroUI&&HeroUI.postMessage) HeroUI.postMessage('SEED:'+moved+'/'+items.length); }catch(e){}
         }catch(e){ console.warn('[hero] skip '+it.id, e); }
