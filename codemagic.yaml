@@ -1,16 +1,16 @@
 workflows:
   ios-unsigned:
-    name: iOS 未签名包
+    name: iOS unsigned ipa
     max_build_duration: 60
     environment:
       flutter: 3.24.5
       xcode: latest
       cocoapods: default
     scripts:
-      - name: 生成工程
+      - name: create project
         script: |
           flutter create --org com.fireluck --project-name xiluo --platforms=ios .
-      - name: 去掉键盘上方的表单条
+      - name: strip input assistant
         script: |
           cat > ios/Runner/AppDelegate.swift <<'SWIFT'
           import Flutter
@@ -24,15 +24,15 @@ workflows:
               didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
             ) -> Bool {
               GeneratedPluginRegistrant.register(with: self)
-              stripAll()
+              stripEverywhere()
               var n = 0
-              Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+              Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
                 n += 1
-                if n < 60 || n % 5 == 0 { DispatchQueue.main.async { self.stripAll() } }
+                if n < 120 || n % 10 == 0 { DispatchQueue.main.async { self.stripEverywhere() } }
               }
               NotificationCenter.default.addObserver(
                 forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main
-              ) { _ in self.stripAll() }
+              ) { _ in self.stripEverywhere() }
               return super.application(application, didFinishLaunchingWithOptions: launchOptions)
             }
 
@@ -44,38 +44,30 @@ workflows:
                 }
               }
               out.append(contentsOf: UIApplication.shared.windows)
-              if let w = UIApplication.shared.delegate?.window, let ww = w { out.append(ww) }
+              if let d = UIApplication.shared.delegate, let w = d.window, let ww = w { out.append(ww) }
               return out
             }
 
-            private func stripAll() {
-              for w in allWindows() { strip(in: w) }
+            private func stripEverywhere() {
+              for w in allWindows() { strip(w) }
             }
 
-            private func strip(in view: UIView) {
-              if let web = view as? WKWebView {
-                web.inputAssistantItem.leadingBarButtonGroups = []
-                web.inputAssistantItem.trailingBarButtonGroups = []
-              }
-              if let tf = view as? UITextField {
-                tf.inputAssistantItem.leadingBarButtonGroups = []
-                tf.inputAssistantItem.trailingBarButtonGroups = []
-              }
-              if let tv = view as? UITextView {
-                tv.inputAssistantItem.leadingBarButtonGroups = []
-                tv.inputAssistantItem.trailingBarButtonGroups = []
-              }
-              for sub in view.subviews { strip(in: sub) }
+            private func strip(_ v: UIView) {
+              v.inputAssistantItem.leadingBarButtonGroups = []
+              v.inputAssistantItem.trailingBarButtonGroups = []
+              for s in v.subviews { strip(s) }
             }
           }
-          SWIFT      - name: 加依赖
+          SWIFT
+          grep -c inputAssistantItem ios/Runner/AppDelegate.swift
+      - name: add dependency
         script: |
           flutter pub add webview_flutter
-      - name: 放入界面
+      - name: copy ui
         script: |
           test -f seed/main.dart
           cp seed/main.dart lib/main.dart
-      - name: 登记资源目录
+      - name: register assets
         script: |
           python3 - <<'PY'
           import pathlib
@@ -89,39 +81,30 @@ workflows:
           else:
               text += '\nflutter:\n  assets:\n' + block + '\n'
           pub.write_text(text, encoding='utf-8')
-          print(text[-800:])
           PY
-      - name: 显示名与权限
+      - name: plist
         script: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName hero" ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string hero" ios/Runner/Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" ios/Runner/Info.plist || true
           /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" ios/Runner/Info.plist || true
-          /usr/libexec/PlistBuddy -c "Add :NSAllowsLocalNetworking bool true" ios/Runner/Info.plist || true
-      - name: 换图标
+      - name: icon
         script: |
           ICON=assets/icon.png
           if [ -f "$ICON" ]; then
             DEST=ios/Runner/Assets.xcassets/AppIcon.appiconset
             rm -rf "$DEST" && mkdir -p "$DEST"
             cp "$ICON" "$DEST/Icon-App-1024x1024@1x.png"
-            cat > "$DEST/Contents.json" <<'JSON'
-          {
-            "images" : [
-              { "filename" : "Icon-App-1024x1024@1x.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" }
-            ],
-            "info" : { "author" : "xcode", "version" : 1 }
-          }
-          JSON
+            printf '%s' '{"images":[{"filename":"Icon-App-1024x1024@1x.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}' > "$DEST/Contents.json"
           fi
-      - name: 编译
+      - name: build
         script: |
           flutter build ios --release --no-codesign
-      - name: 打包
+      - name: pack
         script: |
           mkdir -p build_out/Payload
           cp -R build/ios/iphoneos/Runner.app build_out/Payload/
           cd build_out
           zip -qr xiluo.ipa Payload
-          ls -la
+          ls -la xiluo.ipa
     artifacts:
       - build_out/xiluo.ipa
