@@ -111,7 +111,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   String? _error;
   List<Map<String, dynamic>> _sessions = [];
   late final AnimationController _anim = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 120), value: 0);
+      vsync: this, duration: const Duration(milliseconds: 170), value: 0);
 
   bool get _open => _anim.value > 0.02;
   bool _modalOpen = false;
