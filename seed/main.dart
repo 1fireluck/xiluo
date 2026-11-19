@@ -111,9 +111,9 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   String? _error;
   List<Map<String, dynamic>> _sessions = [];
   late final AnimationController _anim = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 180), value: 0);
+      vsync: this, duration: const Duration(milliseconds: 120), value: 0);
 
-  bool get _open => _anim.value > 0.02;
+  bool get _open => _anim.value > 0.02;`n  bool _modalOpen = false;
 
   @override
   void initState() {
@@ -156,6 +156,11 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
 
   void _onJs(JavaScriptMessage m) {
     final s = m.message;
+    if (s.startsWith('M:')) {
+      final open = s.substring(2) == '0';
+      if (mounted && open != _modalOpen) setState(() => _modalOpen = open);
+      return;
+    }
     if (s.startsWith('S:')) {
       try {
         final list = jsonDecode(s.substring(2)) as List;
@@ -224,6 +229,24 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
                 ),
                 child: Column(
                   children: [
+                    SizedBox(
+                      height: 46,
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: _toggle,
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.menu,
+                                  size: 22, color: Color(0xFFE9E9EA)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     Expanded(
                       child: Stack(
                         children: [
@@ -246,6 +269,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
                                                 color: Colors.white38)))
                                     : WebViewWidget(controller: _web!)),
                           ),
+                          if (!_modalOpen)
                           Positioned(
                             left: 0,
                             right: 0,
@@ -265,32 +289,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
                   ],
                 ),
               ),
-              if (_open)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: GestureDetector(
-                    onTap: _toggle,
-                    behavior: HitTestBehavior.opaque,
-                    child: const SizedBox.shrink(),
-                  ),
-                ),
-              Positioned(
-                left: 6,
-                top: 4,
-                child: GestureDetector(
-                  onTap: _toggle,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.menu, size: 22, color: Color(0xFFE9E9EA)),
-                  ),
-                ),
-              ),
+
             ],
           );
         }),
