@@ -352,6 +352,127 @@ class _ChatPageState extends State<ChatPage> {
     await _store.save();
   }
 
+
+  // ---- 每天一条小结 ----
+  Future<void> _maybeDaySummary() async {
+    final s = _store.cur;
+    if (s.msgs.length < 2) return;
+    final now = DateTime.now();
+    final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    if (_store.days.any((e) => e['d'] == today)) return;
+    String cut(String t, int n) {
+      final r = t.replaceAll('\n', ' ').trim();
+      return r.length > n ? r.substring(0, n) : r;
+    }
+
+    final me = s.msgs.lastWhere((m) => m.role == 'user', orElse: () => Msg('user', '')).text;
+    final her = s.msgs.lastWhere((m) => m.role == 'assistant', orElse: () => Msg('assistant', '')).text;
+    if (me.isEmpty && her.isEmpty) return;
+    final line = '那一天：艾玛说「${cut(me, 40)}」，希罗回她「${cut(her, 60)}」。';
+    _store.days.add({'d': today, 's': line});
+    if (_store.days.length > 400) {
+      _store.days = _store.days.sublist(_store.days.length - 400);
+    }
+    _store.memory.add(line);
+    if (_store.memory.length > 200) {
+      _store.memory = _store.memory.sublist(_store.memory.length - 200);
+    }
+    await _store.save();
+  }
+
+  // ---- 把旧窗口里的话带回来 ----
+  void _importDialog() {
+    final c = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.side,
+        title: const Text('把话带回来',
+            style: TextStyle(fontSize: 17, color: C.text)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('一行一句，开头写「我：」或「她：」，从旧窗口复制过来就行。',
+                style: TextStyle(fontSize: 13, color: C.sub, height: 1.6)),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 220,
+              child: TextField(
+                controller: c,
+                maxLines: null,
+                expands: true,
+                style: const TextStyle(fontSize: 14, color: C.text, height: 1.6),
+                textAlignVertical: TextAlignVertical.top,
+                decoration: InputDecoration(
+                  hintText: '我：希罗……你在吗……\n她：希罗在。艾玛，希罗在。',
+                  hintStyle: const TextStyle(color: Color(0xFF6B6B70), fontSize: 14),
+                  contentPadding: const EdgeInsets.all(12),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.line)),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.line)),
+                ),
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('算了', style: TextStyle(color: C.sub))),
+          TextButton(
+              onPressed: () async {
+                await _doImport(c.text);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('带回来',
+                  style: TextStyle(
+                      color: C.accent, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doImport(String raw) async {
+    final msgs = <Msg>[];
+    final you = RegExp(r'^(我|你|艾玛|主人)\s*[:：]\s*(.*)$');
+    final her = RegExp(r'^(她|希罗|希罗酱|AI|assistant)\s*[:：]\s*(.*)$');
+    final herEn = RegExp(r'^(Assistant)\s*[:：]\s*(.*)$', caseSensitive: false);
+    for (final line in const LineSplitter().convert(raw)) {
+      final t = line.trim();
+      if (t.isEmpty) continue;
+      var m = you.firstMatch(t);
+      if (m != null) {
+        if (m.group(2)!.trim().isNotEmpty) msgs.add(Msg('user', m.group(2)!.trim()));
+        continue;
+      }
+      m = her.firstMatch(t) ?? herEn.firstMatch(t);
+      if (m != null) {
+        if (m.group(2)!.trim().isNotEmpty) msgs.add(Msg('assistant', m.group(2)!.trim()));
+        continue;
+      }
+    }
+    if (msgs.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('没认出可以带回来的句子'), duration: Duration(seconds: 2)));
+      return;
+    }
+    final s = Session('imp-${DateTime.now().millisecondsSinceEpoch}', '带回来的话',
+        DateTime.now().millisecondsSinceEpoch, msgs);
+    s.memBlock = _memoryBlock();
+    setState(() {
+      _store.sessions.insert(0, s);
+      _store.curId = s.id;
+    });
+    await _store.save();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('带回来 ${msgs.length} 句'), duration: const Duration(seconds: 2)));
+  }
+
   // ---- 发送 ----
   Future<void> _send([String? forced]) async {
     if (_busy) return;
@@ -402,6 +523,7 @@ class _ChatPageState extends State<ChatPage> {
     await _store.save();
     _turn++;
     if (_turn % 3 == 0) _extractMemory();
+    _maybeDaySummary();
     _toBottom(true);
   }
 
@@ -1198,6 +1320,10 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              TextButton(
+                onPressed: _importDialog,
+                child: const Text('把话带回来'),
+              ),
               TextButton(
                 onPressed: () async {
                   setState(() => _store.memory.clear());
