@@ -233,6 +233,8 @@
             var folded = trim(body);
             var pre = systemPrefix(lastUser, folded);
             if (pre) body.system = pre + (body.system || '');
+            // 关掉深度思考（免得每次都先想一大段才说话）
+            body.thinking = { type: 'disabled' };
 
             var key = hdr['x-api-key'] || hdr['X-Api-Key'] || '';
             var base = url.replace(/\/anthropic\/v1\/messages.*$/, '');
