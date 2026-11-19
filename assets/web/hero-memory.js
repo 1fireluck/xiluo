@@ -441,7 +441,7 @@
       }
     }catch(e){ console.warn('[hero] seed failed',e); }
   }
-  // 自动搬运已停用（改用官方导入）
+  setTimeout(run, 2500);
 })();
 /* ===== 每天一次：把当天有更新的会话传到电脑（覆盖上一次） ===== */
 (function heroSync(){
