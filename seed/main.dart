@@ -45,12 +45,14 @@ class WebHost {
       try {
         final d = await rootBundle.load(asset);
         bytes = d.buffer.asUint8List(d.offsetInBytes, d.lengthInBytes);
-        if (bytes.length < 2 * 1024 * 1024) _cache[asset] = bytes;
+        _cache[asset] = bytes;
       } catch (_) {
-        try {
-          final d = await rootBundle.load('assets/web/index.html');
-          bytes = d.buffer.asUint8List(d.offsetInBytes, d.lengthInBytes);
-        } catch (_) {}
+        if (!path.contains('.')) {
+          try {
+            final d = await rootBundle.load('assets/web/index.html');
+            bytes = d.buffer.asUint8List(d.offsetInBytes, d.lengthInBytes);
+          } catch (_) {}
+        }
       }
     }
     final res = req.response;
@@ -60,7 +62,12 @@ class WebHost {
       return;
     }
     res.headers.set('Content-Type', _mime(path));
-    res.headers.set('Cache-Control', 'no-cache');
+    if (path.endsWith('.html')) {
+      res.headers.set('Cache-Control', 'no-cache');
+    } else {
+      res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+    res.headers.contentLength = bytes.length;
     res.add(bytes);
     await res.close();
   }
@@ -152,9 +159,16 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
           onPageFinished: (_) {
             _web?.runJavaScript('window.heroMemory&&window.heroMemory.watch&&window.heroMemory.watch();');
           },
+          onPageStarted: (_) {
+            if (mounted && _error != null) setState(() => _error = null);
+          },
           onWebResourceError: (e) {
             if (!mounted) return;
-            if (e.isForMainFrame ?? true) setState(() => _error = e.description);
+            if (!(e.isForMainFrame ?? false)) return;
+            if (e.errorCode == -999) return;
+            final u = e.url ?? '';
+            if (u.isNotEmpty && !u.startsWith(_host.origin)) return;
+            setState(() => _error = e.description);
           },
         ))
         ..loadRequest(Uri.parse('${_host.origin}/?v=${DateTime.now().millisecondsSinceEpoch}'));
