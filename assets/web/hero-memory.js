@@ -492,3 +492,43 @@
   }
   setTimeout(run, 800);
 })();
+/* ===== 每天一次：把当天有更新的会话传到电脑（覆盖上一次） ===== */
+(function heroSync(){
+  const KEY='hero.sync.date', URLKEY='hero.sync.url';
+  const def='http://192.168.71.7:8092/sync';
+  function today(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+  function openDB(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open('chat-demo',11);
+      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+      r.onupgradeneeded=()=>{};
+    });
+  }
+  function all(db){
+    return new Promise((res,rej)=>{
+      try{ const q=db.transaction('sessions','readonly').objectStore('sessions').getAll();
+        q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); }catch(e){ rej(e); }
+    });
+  }
+  async function run(){
+    try{
+      if(localStorage.getItem(KEY)===today()) return;
+      const db=await openDB();
+      const list=await all(db);
+      if(!list.length) return;
+      const url=localStorage.getItem(URLKEY)||def;
+      const since=Date.now()-36*3600*1000;
+      let ok=0;
+      for(const s of list){
+        if((s.updatedAt||0) < since) continue;
+        try{
+          await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:s.id,title:s.title,createdAt:s.createdAt,updatedAt:s.updatedAt,messages:s.messages})});
+          ok++;
+        }catch(e){}
+      }
+      if(ok>0){ localStorage.setItem(KEY,today()); console.log('[hero] 今天已传到电脑 '+ok+' 个会话'); }
+    }catch(e){ console.warn('[hero] sync failed',e); }
+  }
+  setTimeout(run, 2500);
+})();
