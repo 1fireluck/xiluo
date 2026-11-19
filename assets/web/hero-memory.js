@@ -441,7 +441,7 @@
       }
     }catch(e){ console.warn('[hero] seed failed',e); }
   }
-  setTimeout(run, 2500);
+  /* 自动搬运已停用：改用官方「导入历史对话」 */
 })();
 /* ===== 每天一次：把当天有更新的会话传到电脑（覆盖上一次） ===== */
 (function heroSync(){
@@ -481,5 +481,5 @@
       if(ok>0){ localStorage.setItem(KEY,today()); console.log('[hero] 今天已传到电脑 '+ok+' 个会话'); }
     }catch(e){ console.warn('[hero] sync failed',e); }
   }
-  setTimeout(run, 2500);
+  /* 自动搬运已停用：改用官方「导入历史对话」 */
 })();
