@@ -285,7 +285,7 @@
     var s = state();
     if (s === last) return;
     last = s;
-    try { if (window.HeroUI && window.HeroUI.postMessage) window.HeroUI.postMessage(s); } catch (e) {}
+    try { if (window.HeroUI && window.HeroUI.postMessage) window.HeroUI.postMessage('M:' + s); } catch (e) {}
   }
   function watch() {
     if (watch.done) return;
