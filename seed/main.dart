@@ -110,7 +110,7 @@ class _ShellState extends State<Shell> {
   WebViewController? _web;
   String? _error;
   Timer? _tick;
-  bool _showComposer = true;
+  bool _drawerOpen = false;
 
   @override
   void initState() {
@@ -163,8 +163,8 @@ class _ShellState extends State<Shell> {
 
   void _onHeroUI(JavaScriptMessage m) {
     if (!mounted) return;
-    final want = m.message == '1';
-    if (want != _showComposer) setState(() => _showComposer = want);
+    final open = m.message == '0';
+    if (open != _drawerOpen) setState(() => _drawerOpen = open);
   }
 
   Future<void> _send() async {
@@ -206,10 +206,18 @@ class _ShellState extends State<Shell> {
                                   strokeWidth: 2, color: Colors.white38)))
                       : WebViewWidget(controller: _web!)),
             ),
-            _Composer(
-              controller: _text,
-              focus: _focus,
-              onSend: _send,
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(
+                  left: _drawerOpen
+                      ? MediaQuery.of(context).size.width * 0.78
+                      : 0),
+              child: _Composer(
+                controller: _text,
+                focus: _focus,
+                onSend: _send,
+              ),
             ),
           ],
         ),
