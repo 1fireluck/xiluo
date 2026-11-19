@@ -684,12 +684,11 @@ window.__topLoaded = true;
         localStorage.setItem(KEY(id), String(win(id) + DEFAULT_WIN));
         location.reload();
       });
-      setTimeout(function () { if (bar) bar.style.transition = 'opacity .4s'; }, 2500);
-      setTimeout(function () { if (bar) bar.style.opacity = '0.25'; }, 6000);
+      window.addEventListener('scroll', function () { if (bar) bar.style.display = ((window.scrollY || 0) <= 40) ? 'block' : 'none'; }, { passive: true });
     }
     var older = t.total - t.shown;
     bar.textContent = '更早还有 ' + older + ' 条 · 点这里往上加载';
-    bar.style.display = 'block';
+    bar.style.display = ((window.scrollY || 0) <= 40) ? 'block' : 'none';
   }
 
   window.heroPage = {
