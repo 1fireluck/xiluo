@@ -21,8 +21,18 @@ class WebHost {
 
   String get origin => 'http://127.0.0.1:${_server!.port}';
 
+  /// 固定端口：IndexedDB / localStorage 按「源」（协议+主机+端口）隔离，
+  /// 端口一变就等于换了一个网站，之前存进去的对话全都看不见。
+  static const int _preferredPort = 8931;
+
   Future<void> start() async {
-    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    for (var p = _preferredPort; p < _preferredPort + 4; p++) {
+      try {
+        _server = await HttpServer.bind(InternetAddress.loopbackIPv4, p);
+        break;
+      } catch (_) {}
+    }
+    _server ??= await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _server!.listen(_handle);
   }
 
