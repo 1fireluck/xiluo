@@ -684,6 +684,7 @@ window.__topLoaded = true;
   // 顶部小条：还有更早的
   var bar = null;
   function paintBanner() {
+    return; // banner 已停用（主人要求去掉顶部提示）
     var t = window.__heroTrim;
     if (!t) return;
     if (!bar) {
