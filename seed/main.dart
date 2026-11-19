@@ -164,11 +164,10 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
           },
           onWebResourceError: (e) {
             if (!mounted) return;
-            if (!(e.isForMainFrame ?? false)) return;
-            if (e.errorCode == -999) return;
-            final u = e.url ?? '';
-            if (u.isNotEmpty && !u.startsWith(_host.origin)) return;
-            setState(() => _error = e.description);
+            if (e.isForMainFrame != true) return;
+            const ignore = <int>{-999, 101, 102, 204, 404};
+            if (ignore.contains(e.errorCode)) return;
+            setState(() => _error = '${e.errorCode} ${e.description}');
           },
         ))
         ..loadRequest(Uri.parse('${_host.origin}/?v=${DateTime.now().millisecondsSinceEpoch}'));
@@ -237,22 +236,34 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
         child: Stack(
           children: [
             Positioned.fill(
-              child: _error != null
-                  ? Center(
-                      child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text('页面没起来：$_error',
-                          style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                    ))
-                  : (_web == null
-                      ? const Center(
-                          child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white38)))
-                      : WebViewWidget(controller: _web!)),
+              child: _web == null
+                  ? const Center(
+                      child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white38)))
+                  : WebViewWidget(controller: _web!),
             ),
+            if (_error != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: GestureDetector(
+                  onTap: () => setState(() => _error = null),
+                  child: Container(
+                    color: const Color(0xCC000000),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Text('加载提示：$_error',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 11)),
+                  ),
+                ),
+              ),
             if (!_modalOpen)
               Positioned(
                 left: 0,
