@@ -12,7 +12,7 @@
   var LS_TURN = 'hero.turn.v2';
   var LS_LASTDAY = 'hero.lastday.v2';
 
-  var MAX_CHARS = 900000;   // 对话正文预算
+  var MAX_CHARS = 1200000;  // 对话正文预算（约 80-100 万 token，留安全余量）
   var MAX_MEM = 60;         // 最多记 60 条
   var INJECT_MEM = 12;      // 每次最多注入 12 条
   var INJECT_CHARS = 900;
