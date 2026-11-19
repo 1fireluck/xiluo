@@ -221,7 +221,7 @@ class _ShellState extends State<Shell> {
               bottom: 0,
               child: ClipRect(
                 child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 450),
+                  duration: const Duration(milliseconds: 340),
                   curve: Curves.easeInOutCubic,
                   offset: Offset(_drawerOpen ? 0.78 : 0, 0),
                   child: _Composer(
