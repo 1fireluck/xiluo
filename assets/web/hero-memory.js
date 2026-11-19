@@ -276,6 +276,7 @@
     try {
       var ov = vis('[class*="overlay-"]') || vis('[class*="mask-"]') || vis('[class*="drawer-ac14ac"]');
       var editing = vis('[class*="textarea-ed6f47"]');
+      try { document.body.classList.toggle('hero-drawer', ov); } catch (e) {}
       return (ov || editing) ? '0' : '1';
     } catch (e) { return '1'; }
   }
