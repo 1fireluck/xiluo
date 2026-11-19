@@ -113,7 +113,8 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   late final AnimationController _anim = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 120), value: 0);
 
-  bool get _open => _anim.value > 0.02;`n  bool _modalOpen = false;
+  bool get _open => _anim.value > 0.02;
+  bool _modalOpen = false;
 
   @override
   void initState() {
