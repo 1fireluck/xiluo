@@ -172,6 +172,13 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       if (mounted && open != _modalOpen) setState(() => _modalOpen = open);
       return;
     }
+    if (s.startsWith('DONE:')) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('搬完了（' + s.substring(5) + ' 个），重开一次 App 就能看到'), duration: const Duration(seconds: 6)),
+      );
+      return;
+    }
     if (s.startsWith('SEED:')) {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
