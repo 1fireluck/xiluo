@@ -111,7 +111,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   String? _error;
   List<Map<String, dynamic>> _sessions = [];
   late final AnimationController _anim = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 260), value: 0);
+      vsync: this, duration: const Duration(milliseconds: 180), value: 0);
 
   bool get _open => _anim.value > 0.02;
 
@@ -256,7 +256,6 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
                                 controller: _text,
                                 focus: _focus,
                                 onSend: _send,
-                                onMenu: _toggle,
                               ),
                             ),
                           ),
@@ -264,6 +263,32 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
                       ),
                     ),
                   ],
+                ),
+              ),
+              if (_open)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: GestureDetector(
+                    onTap: _toggle,
+                    behavior: HitTestBehavior.opaque,
+                    child: const SizedBox.shrink(),
+                  ),
+                ),
+              Positioned(
+                left: 6,
+                top: 4,
+                child: GestureDetector(
+                  onTap: _toggle,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.menu, size: 22, color: Color(0xFFE9E9EA)),
+                  ),
                 ),
               ),
             ],
@@ -372,12 +397,10 @@ class _Composer extends StatelessWidget {
   const _Composer(
       {required this.controller,
       required this.focus,
-      required this.onSend,
-      required this.onMenu});
+      required this.onSend});
   final TextEditingController controller;
   final FocusNode focus;
   final VoidCallback onSend;
-  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -395,14 +418,7 @@ class _Composer extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            GestureDetector(
-              onTap: onMenu,
-              behavior: HitTestBehavior.opaque,
-              child: const Padding(
-                padding: EdgeInsets.only(bottom: 12, right: 6),
-                child: Icon(Icons.menu, size: 20, color: _fg),
-              ),
-            ),
+
             Expanded(
               child: TextField(
                 controller: controller,
