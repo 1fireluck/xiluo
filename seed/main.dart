@@ -254,6 +254,8 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
                 controller: _text,
                 focus: _focus,
                 onSend: _send,
+                onToggle: (k) => _web?.runJavaScript(
+                    "window.heroToggle&&window.heroToggle('$k');"),
               ),
           ],
         ),
@@ -352,10 +354,29 @@ class _Composer extends StatelessWidget {
   const _Composer(
       {required this.controller,
       required this.focus,
-      required this.onSend});
+      required this.onSend,
+      required this.onToggle});
   final TextEditingController controller;
   final FocusNode focus;
   final VoidCallback onSend;
+  final void Function(String) onToggle;
+
+  Widget _pill(String label, String key) => GestureDetector(
+        onTap: () => onToggle(key),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(key == 'think' ? Icons.auto_awesome : Icons.public,
+                size: 14, color: _hint),
+            const SizedBox(width: 5),
+            Text(label, style: const TextStyle(color: _fg, fontSize: 13)),
+          ]),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -370,11 +391,11 @@ class _Composer extends StatelessWidget {
           border: Border.all(color: Colors.white.withOpacity(0.06)),
         ),
         padding: const EdgeInsets.fromLTRB(14, 2, 4, 2),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 2, 6, 0),
               child: TextField(
                 controller: controller,
                 focusNode: focus,
@@ -387,28 +408,36 @@ class _Composer extends StatelessWidget {
                   border: InputBorder.none,
                   hintText: '发消息',
                   hintStyle: TextStyle(color: _hint, fontSize: 16),
-                  contentPadding: EdgeInsets.symmetric(vertical: 13),
+                  contentPadding: EdgeInsets.symmetric(vertical: 12),
                 ),
                 onSubmitted: (_) => onSend(),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(bottom: 5, left: 4),
-              child: GestureDetector(
-                onTap: has ? onSend : null,
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: has ? _accent : _box,
-                    shape: BoxShape.circle,
-                    border: has
-                        ? null
-                        : Border.all(color: Colors.white.withOpacity(0.10)),
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+              child: Row(
+                children: [
+                  _pill('深度思考', 'think'),
+                  const SizedBox(width: 8),
+                  _pill('智能搜索', 'search'),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: has ? onSend : null,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: has ? _accent : _box,
+                        shape: BoxShape.circle,
+                        border: has
+                            ? null
+                            : Border.all(color: Colors.white.withOpacity(0.10)),
+                      ),
+                      child: Icon(Icons.arrow_upward,
+                          size: 19, color: has ? Colors.white : _hint),
+                    ),
                   ),
-                  child: Icon(Icons.arrow_upward,
-                      size: 19, color: has ? Colors.white : _hint),
-                ),
+                ],
               ),
             ),
           ],
