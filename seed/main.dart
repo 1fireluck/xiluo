@@ -111,7 +111,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   String? _error;
   List<Map<String, dynamic>> _sessions = [];
   late final AnimationController _anim = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 200), value: 0);
+      vsync: this, duration: const Duration(milliseconds: 120), value: 0);
 
   bool get _open => _anim.value > 0.02;
   bool _modalOpen = false;
@@ -224,12 +224,9 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
               ),
               AnimatedBuilder(
                 animation: _anim,
-                builder: (_, child) => IgnorePointer(
-                  ignoring: _anim.value > 0.02,
-                  child: Transform.translate(
-                    offset: Offset(_anim.value * dw, 0),
-                    child: child,
-                  ),
+                builder: (_, child) => Transform.translate(
+                  offset: Offset(_anim.value * dw, 0),
+                  child: child,
                 ),
                 child: Column(
                   children: [
@@ -323,7 +320,7 @@ class _Drawer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: InkWell(
