@@ -233,47 +233,29 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: _web == null
-                  ? const Center(
-                      child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white38)))
-                  : WebViewWidget(controller: _web!),
-            ),
-            if (_error != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                child: GestureDetector(
-                  onTap: () => setState(() => _error = null),
-                  child: Container(
-                    color: const Color(0xCC000000),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text('加载提示：$_error',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 11)),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: _web == null
+                        ? const Center(
+                            child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white38)))
+                        : WebViewWidget(controller: _web!),
                   ),
-                ),
+                ],
               ),
+            ),
             if (!_modalOpen)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _Composer(
-                  controller: _text,
-                  focus: _focus,
-                  onSend: _send,
-                ),
+              _Composer(
+                controller: _text,
+                focus: _focus,
+                onSend: _send,
               ),
           ],
         ),
