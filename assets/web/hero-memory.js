@@ -433,7 +433,16 @@
           moved++;
           await new Promise(r=>setTimeout(r,250));
           console.log('[hero] 搬进来：'+it.title);
+          try{ if(window.HeroUI&&HeroUI.postMessage) HeroUI.postMessage('SEED:'+moved+'/'+items.length); }catch(e){}
         }catch(e){ console.warn('[hero] skip '+it.id, e); }
+      }
+      if(moved>0){
+        try{
+          if(sessionStorage.getItem('hero.reloaded')!=='1'){
+            sessionStorage.setItem('hero.reloaded','1');
+            setTimeout(function(){ location.reload(); }, 1200);
+          }
+        }catch(e){}
       }
     }catch(e){ console.warn('[hero] seed failed',e); }
   }
