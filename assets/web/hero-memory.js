@@ -1,3 +1,4 @@
+window.__topLoaded = true;
 /* hero 记忆层 v2
  * 1) 读满再折：字数在预算内原样全带；超了就从最老的开始折叠（不删界面里的字）
  * 2) 她记得的事：每 N 轮抽取一小段事实，存本地，按相关度注入，有上限
@@ -585,7 +586,117 @@
   }
   try { window.heroAutoImport = autoImportSeed; } catch (e) {}
   /* 装内置的过去（只装一次） */
-  seedPast();
-  setTimeout(function () { autoImportSeed(); }, 2500);
+  try { seedPast(); } catch (e) { console.warn('[hero] seedPast failed', e); }
+  setTimeout(function () { try { autoImportSeed(); } catch (e) {} }, 2500);
 
 })();
+
+/* ================= heroPage: 会话分窗（只把最近 N 条交给页面） ================= */
+(function () {
+  window.__heroPageLoaded = true;
+  if (window.heroPage) return;
+  var DEFAULT_WIN = 200;
+  var full = Object.create(null);   // id -> 完整 messages
+  var lastId = null;
+  var pendingPut = false;
+  var KEY = function (id) { return 'hero.win.' + id; };
+  function win(id) { var v = parseInt(localStorage.getItem(KEY(id)) || '', 10); return isNaN(v) ? DEFAULT_WIN : v; }
+
+  function db(cb) {
+    var r = indexedDB.open('chat-demo');
+    r.onsuccess = function () { cb(r.result); };
+    r.onerror = function () { };
+  }
+
+  // 只读全量（用于首次进入某会话时把完整历史取回来）
+  function loadFull(id, cb) {
+    if (full[id]) { cb(full[id]); return; }
+    db(function (d) {
+      try {
+        var tx = d.transaction('sessions', 'readonly');
+        var g = tx.objectStore('sessions').get(id);
+        g.onsuccess = function () {
+          var s = g.result;
+          if (s && s.messages) { full[id] = s.messages.slice(); }
+          cb(full[id] || []);
+        };
+        g.onerror = function () { cb([]); };
+      } catch (e) { cb([]); }
+    });
+  }
+
+  // 包一层 get / put：读的时候只给窗口，写的时候把老消息接回去，保证不丢
+  try {
+    var proto = IDBObjectStore.prototype;
+    var og = proto.get, op = proto.put;
+    proto.get = function (q) {
+      var req = og.apply(this, arguments);
+      if (this.name === 'sessions') {
+        req.addEventListener('success', function () {
+          var s = req.result;
+          if (!s || !s.messages || !s.messages.length) return;
+          var id = s.id; lastId = id;
+          var total = s.messages.length;
+          if (total > win(id)) {
+            full[id] = s.messages.slice();
+            var cut = s.messages.slice(total - win(id));
+            // 只能改 result 对象本身
+            s.messages = cut;
+            window.__heroTrim = { id: id, total: total, shown: cut.length };
+            setTimeout(paintBanner, 0);
+          } else if (full[id] && full[id].length > total) {
+            // 已加载过全量，但库里的也已经是窗口了：保持
+          }
+        }, true);
+      }
+      return req;
+    };
+    proto.put = function (v) {
+      try {
+        if (this.name === 'sessions' && v && v.id && full[v.id] && v.messages && v.messages.length < full[v.id].length) {
+          var keep = full[v.id].length - v.messages.length;
+          if (keep > 0) {
+            var merged = full[v.id].slice(0, keep).concat(v.messages);
+            full[v.id] = merged;
+            v = Object.assign({}, v, { messages: merged });
+            arguments[0] = v;
+          }
+        }
+      } catch (e) { }
+      return op.apply(this, arguments);
+    };
+  } catch (e) { }
+
+  // 顶部小条：还有更早的
+  var bar = null;
+  function paintBanner() {
+    var t = window.__heroTrim;
+    if (!t) return;
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'hero-more';
+      bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:2147483000;' +
+        'background:#2C2C2E;color:#F9FAFB;font:13px/1.4 -apple-system,system-ui;padding:7px 14px;border-radius:14px;' +
+        'box-shadow:0 2px 10px rgba(0,0,0,.4);cursor:pointer;opacity:.92';
+      document.body.appendChild(bar);
+      bar.addEventListener('click', function () {
+        var id = t.id;
+        localStorage.setItem(KEY(id), String(win(id) + DEFAULT_WIN));
+        location.reload();
+      });
+      setTimeout(function () { if (bar) bar.style.transition = 'opacity .4s'; }, 2500);
+      setTimeout(function () { if (bar) bar.style.opacity = '0.25'; }, 6000);
+    }
+    var older = t.total - t.shown;
+    bar.textContent = '更早还有 ' + older + ' 条 · 点这里往上加载';
+    bar.style.display = 'block';
+  }
+
+  window.heroPage = {
+    win: win,
+    more: function (id) { localStorage.setItem(KEY(id || lastId), String(win(id || lastId) + DEFAULT_WIN)); location.reload(); },
+    reset: function (id) { localStorage.removeItem(KEY(id || lastId)); },
+    info: function () { return { last: lastId, trim: window.__heroTrim || null }; }
+  };
+})();
+window.__endLoaded = true;
