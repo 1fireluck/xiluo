@@ -220,104 +220,38 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
-        child: LayoutBuilder(builder: (ctx, box) {
-          final dw = box.maxWidth * 0.78;
-          return Stack(
-            children: [
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _error != null
+                  ? Center(
+                      child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('页面没起来：$_error',
+                          style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                    ))
+                  : (_web == null
+                      ? const Center(
+                          child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white38)))
+                      : WebViewWidget(controller: _web!)),
+            ),
+            if (!_modalOpen)
               Positioned(
                 left: 0,
-                top: 46,
+                right: 0,
                 bottom: 0,
-                width: dw,
-                child: _Drawer(
-                  width: dw,
-                  sessions: _sessions,
-                  onNew: () {
-                    _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.newChat();');
-                    _anim.reverse();
-                  },
-                  onOpen: (i) {
-                    _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.open($i);');
-                    _anim.reverse();
-                  },
-                  onSettings: () {
-                    _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.settings();');
-                    _anim.reverse();
-                  },
+                child: _Composer(
+                  controller: _text,
+                  focus: _focus,
+                  onSend: _send,
                 ),
               ),
-              AnimatedBuilder(
-                animation: _anim,
-                builder: (_, child) => Transform.translate(
-                  offset: Offset(_anim.value * dw, 0),
-                  child: child,
-                ),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      height: 46,
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: _toggle,
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              width: 46,
-                              height: 46,
-                              alignment: Alignment.center,
-                              child: const Icon(Icons.menu,
-                                  size: 22, color: Color(0xFFE9E9EA)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: _error != null
-                                ? Center(
-                                    child: Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Text('页面没起来：$_error',
-                                        style: const TextStyle(
-                                            color: Colors.white70, fontSize: 14)),
-                                  ))
-                                : (_web == null
-                                    ? const Center(
-                                        child: SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white38)))
-                                    : WebViewWidget(controller: _web!)),
-                          ),
-                          if (!_modalOpen)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: IgnorePointer(
-                              ignoring: _open,
-                              child: _Composer(
-                                controller: _text,
-                                focus: _focus,
-                                onSend: _send,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            ],
-          );
-        }),
+          ],
+        ),
       ),
     );
   }
