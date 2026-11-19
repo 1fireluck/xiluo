@@ -16,6 +16,15 @@ workflows:
           import Flutter
           import UIKit
           import WebKit
+          import ObjectiveC
+
+          private var heroEmptyAssistant = UITextInputAssistantItem()
+
+          extension UIView {
+            @objc func hero_inputAssistantItem() -> UITextInputAssistantItem {
+              return heroEmptyAssistant
+            }
+          }
 
           @main
           @objc class AppDelegate: FlutterAppDelegate {
@@ -24,42 +33,19 @@ workflows:
               didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
             ) -> Bool {
               GeneratedPluginRegistrant.register(with: self)
-              stripEverywhere()
-              var n = 0
-              Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
-                n += 1
-                if n < 120 || n % 10 == 0 { DispatchQueue.main.async { self.stripEverywhere() } }
+
+              let orig = #selector(getter: UIView.inputAssistantItem)
+              let repl = #selector(UIView.hero_inputAssistantItem)
+              if let m1 = class_getInstanceMethod(UIView.self, orig),
+                 let m2 = class_getInstanceMethod(UIView.self, repl) {
+                method_exchangeImplementations(m1, m2)
               }
-              NotificationCenter.default.addObserver(
-                forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main
-              ) { _ in self.stripEverywhere() }
               return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-            }
-
-            private func allWindows() -> [UIWindow] {
-              var out: [UIWindow] = []
-              if #available(iOS 13.0, *) {
-                for scene in UIApplication.shared.connectedScenes {
-                  if let ws = scene as? UIWindowScene { out.append(contentsOf: ws.windows) }
-                }
-              }
-              out.append(contentsOf: UIApplication.shared.windows)
-              if let d = UIApplication.shared.delegate, let w = d.window, let ww = w { out.append(ww) }
-              return out
-            }
-
-            private func stripEverywhere() {
-              for w in allWindows() { strip(w) }
-            }
-
-            private func strip(_ v: UIView) {
-              v.inputAssistantItem.leadingBarButtonGroups = []
-              v.inputAssistantItem.trailingBarButtonGroups = []
-              for s in v.subviews { strip(s) }
             }
           }
           SWIFT
-          grep -c inputAssistantItem ios/Runner/AppDelegate.swift
+          grep -c hero_inputAssistantItem ios/Runner/AppDelegate.swift || true
+
       - name: add dependency
         script: |
           flutter pub add webview_flutter
