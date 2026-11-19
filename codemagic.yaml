@@ -24,24 +24,51 @@ workflows:
               didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
             ) -> Bool {
               GeneratedPluginRegistrant.register(with: self)
-              Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
-                DispatchQueue.main.async { self.strip(in: UIApplication.shared.windows) }
+              stripAll()
+              var n = 0
+              Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+                n += 1
+                if n < 60 || n % 5 == 0 { DispatchQueue.main.async { self.stripAll() } }
               }
+              NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main
+              ) { _ in self.stripAll() }
               return super.application(application, didFinishLaunchingWithOptions: launchOptions)
             }
 
-            private func strip(in views: [UIView]) {
-              for v in views {
-                if let web = v as? WKWebView {
-                  web.inputAssistantItem.leadingBarButtonGroups = []
-                  web.inputAssistantItem.trailingBarButtonGroups = []
+            private func allWindows() -> [UIWindow] {
+              var out: [UIWindow] = []
+              if #available(iOS 13.0, *) {
+                for scene in UIApplication.shared.connectedScenes {
+                  if let ws = scene as? UIWindowScene { out.append(contentsOf: ws.windows) }
                 }
-                if !v.subviews.isEmpty { strip(in: v.subviews) }
               }
+              out.append(contentsOf: UIApplication.shared.windows)
+              if let w = UIApplication.shared.delegate?.window, let ww = w { out.append(ww) }
+              return out
+            }
+
+            private func stripAll() {
+              for w in allWindows() { strip(in: w) }
+            }
+
+            private func strip(in view: UIView) {
+              if let web = view as? WKWebView {
+                web.inputAssistantItem.leadingBarButtonGroups = []
+                web.inputAssistantItem.trailingBarButtonGroups = []
+              }
+              if let tf = view as? UITextField {
+                tf.inputAssistantItem.leadingBarButtonGroups = []
+                tf.inputAssistantItem.trailingBarButtonGroups = []
+              }
+              if let tv = view as? UITextView {
+                tv.inputAssistantItem.leadingBarButtonGroups = []
+                tv.inputAssistantItem.trailingBarButtonGroups = []
+              }
+              for sub in view.subviews { strip(in: sub) }
             }
           }
-          SWIFT
-      - name: 加依赖
+          SWIFT      - name: 加依赖
         script: |
           flutter pub add webview_flutter
       - name: 放入界面
