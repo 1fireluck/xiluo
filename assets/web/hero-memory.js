@@ -778,3 +778,50 @@ window.__endLoaded = true;
   setTimeout(pad, 5000);
   window.addEventListener('resize', pad);
 })();
+
+
+/* ===== heroPerf：把卡顿量出来发回电脑 ===== */
+(function () {
+  var ENDPOINT = 'http://192.168.71.7:8094/diag';
+  var longs = [], frames = [], lastT = 0, lastLong = 0;
+  try {
+    new PerformanceObserver(function (l) {
+      l.getEntries().forEach(function (e) {
+        lastLong = e.duration;
+        if (longs.length < 40) longs.push({ d: Math.round(e.duration), t: Math.round(e.startTime) });
+      });
+    }).observe({ entryTypes: ['longtask'] });
+  } catch (e) {}
+  function raf() {
+    var now = performance.now();
+    if (lastT) {
+      var gap = now - lastT;
+      if (gap > 34) { if (frames.length < 60) frames.push(Math.round(gap)); }
+    }
+    lastT = now;
+    requestAnimationFrame(raf);
+  }
+  requestAnimationFrame(raf);
+  function report(tag) {
+    try {
+      fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tag: tag, which: 'perf',
+          longCount: longs.length,
+          longest: longs.length ? Math.max.apply(null, longs.map(function (x) { return x.d; })) : 0,
+          longTop: longs.slice(-8),
+          spikeCount: frames.length,
+          spikeTop: frames.slice(-8),
+          scrollTop: (function(){var e=document.scrollingElement||document.body;return Math.round(e.scrollTop||0);})(),
+          msgs: document.querySelectorAll('[class*=message-]').length,
+          at: Date.now()
+        })
+      });
+    } catch (e) {}
+  }
+  window.heroPerf = report;
+  setInterval(function () { report('perf'); }, 8000);
+  window.addEventListener('pagehide', function () { report('perf-exit'); });
+})();
