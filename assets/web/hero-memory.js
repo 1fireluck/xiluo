@@ -706,6 +706,20 @@ window.__topLoaded = true;
     bar.style.display = ((window.scrollY || 0) <= 40) ? 'block' : 'none';
   }
 
+  function autoLoadEarlier() {
+    var el = document.scrollingElement || document.body;
+    if (!el) return;
+    var nearTop = (el.scrollTop || 0) <= 60;
+    if (!nearTop) return;
+    if (window.__heroLoadingEarlier) return;
+    window.__heroLoadingEarlier = true;
+    var ids = Object.keys(window.__heroTrim ? { x: 1 } : {});
+    try {
+      var cur = window.__heroTrim && window.__heroTrim.id;
+      if (cur && window.heroPage && window.heroPage.more) window.heroPage.more();
+    } catch (e) { window.__heroLoadingEarlier = false; }
+  }
+  window.__autoLoadEarlier = autoLoadEarlier;
   window.heroPage = {
     win: win,
     more: function (id) { localStorage.setItem(KEY(id || lastId), String(win(id || lastId) + DEFAULT_WIN)); location.reload(); },
@@ -825,3 +839,34 @@ window.__endLoaded = true;
   setInterval(function () { report('perf'); }, 8000);
   window.addEventListener('pagehide', function () { report('perf-exit'); });
 })();
+
+
+/* ===== 滑到最顶自动载入更早（不再显示任何提示条） ===== */
+(function () {
+  var armed = false;
+  function hook() {
+    var el = document.scrollingElement || document.body;
+    if (!el) return;
+    el.addEventListener('scroll', function () {
+      if (armed) return;
+      if ((el.scrollTop || 0) <= 40 && window.__heroTrim && window.__heroTrim.total > window.__heroTrim.shown) {
+        armed = true;
+        try { window.heroPage.more(); } catch (e) { armed = false; }
+      }
+    }, { passive: true });
+    armed = false;
+  }
+  setTimeout(hook, 1500);
+})();
+
+
+/* ===== 供原生胶囊调用：切换深度思考 / 智能搜索 ===== */
+window.heroToggle = function (which) {
+  var txt = which === 'search' ? '智能搜索' : '深度思考';
+  var btns = [].slice.call(document.querySelectorAll('button'));
+  var hit = btns.filter(function (b) {
+    return (b.textContent || '').replace(/\s/g, '').indexOf(txt) >= 0;
+  })[0];
+  if (hit) { hit.click(); return 'ok'; }
+  return 'miss';
+};
