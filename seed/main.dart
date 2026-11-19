@@ -202,7 +202,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
             children: [
               Positioned(
                 left: 0,
-                top: 0,
+                top: 46,
                 bottom: 0,
                 width: dw,
                 child: _Drawer(
