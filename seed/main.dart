@@ -170,7 +170,7 @@ class _ShellState extends State<Shell> {
     if (open == _drawerOpen) return;
     _slide?.cancel();
     // 开与关都让页面先动，输入框随后跟上
-    _slide = Timer(const Duration(milliseconds: 110), () {
+    _slide = Timer(Duration.zero, () {
       if (!mounted) return;
       setState(() => _drawerOpen = open);
     });
@@ -221,7 +221,7 @@ class _ShellState extends State<Shell> {
               bottom: 0,
               child: ClipRect(
                 child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 340),
+                  duration: Duration.zero,
                   curve: Curves.easeInOutCubic,
                   offset: Offset(_drawerOpen ? 0.78 : 0, 0),
                   child: _Composer(
