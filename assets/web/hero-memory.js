@@ -754,3 +754,27 @@ window.__endLoaded = true;
     else clearInterval(iv);
   }, 5000);
 })();
+
+
+/* ===== heroPad：给滚动区留出底部空间（原生输入栏高度），并关掉回弹 ===== */
+(function () {
+  var css = document.createElement('style');
+  css.textContent = 'html,body{overscroll-behavior:none;}';
+  document.head.appendChild(css);
+  function pad() {
+    var els = [].slice.call(document.querySelectorAll('div'));
+    var best = null;
+    els.forEach(function (e) {
+      var s = getComputedStyle(e);
+      if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && e.scrollHeight > e.clientHeight + 30) {
+        if (!best || e.scrollHeight > best.scrollHeight) best = e;
+      }
+    });
+    if (best) best.style.paddingBottom = '104px';
+  }
+  window.heroPad = pad;
+  setTimeout(pad, 600);
+  setTimeout(pad, 2000);
+  setTimeout(pad, 5000);
+  window.addEventListener('resize', pad);
+})();
