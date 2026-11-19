@@ -770,7 +770,7 @@ window.__endLoaded = true;
         if (!best || e.scrollHeight > best.scrollHeight) best = e;
       }
     });
-    if (best) best.style.paddingBottom = '104px';
+    if (best) best.style.paddingBottom = '0px';
   }
   window.heroPad = pad;
   setTimeout(pad, 600);
