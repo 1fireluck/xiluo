@@ -17,15 +17,31 @@ workflows:
           import UIKit
           import WebKit
           import ObjectiveC
-
-          private var heroEmptyAssistant = UITextInputAssistantItem()
-
+          
+          private let heroEmptyAssistant = UITextInputAssistantItem()
+          
           extension UIView {
             @objc func hero_inputAssistantItem() -> UITextInputAssistantItem {
               return heroEmptyAssistant
             }
           }
-
+          
+          private func heroHookClass(_ name: String) {
+            guard let cls = NSClassFromString(name) else { return }
+            let sel = NSSelectorFromString("inputAssistantItem")
+            guard let m = class_getInstanceMethod(cls, sel) else { return }
+            let block: @convention(block) (AnyObject) -> UITextInputAssistantItem = { _ in heroEmptyAssistant }
+            let imp = imp_implementationWithBlock(block)
+            class_replaceMethod(cls, sel, imp, method_getTypeEncoding(m))
+          }
+          
+          private func heroHookAll() {
+            heroHookClass("WKContentView")
+            heroHookClass("WKWebView")
+            heroHookClass("UITextView")
+            heroHookClass("UITextField")
+          }
+          
           @main
           @objc class AppDelegate: FlutterAppDelegate {
             override func application(
@@ -33,13 +49,22 @@ workflows:
               didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
             ) -> Bool {
               GeneratedPluginRegistrant.register(with: self)
-
+          
               let orig = #selector(getter: UIView.inputAssistantItem)
               let repl = #selector(UIView.hero_inputAssistantItem)
               if let m1 = class_getInstanceMethod(UIView.self, orig),
                  let m2 = class_getInstanceMethod(UIView.self, repl) {
                 method_exchangeImplementations(m1, m2)
               }
+          
+              heroHookAll()
+              var ticks = 0
+              Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+                heroHookAll()
+                ticks += 1
+                if ticks > 120 { timer.invalidate() }
+              }
+          
               return super.application(application, didFinishLaunchingWithOptions: launchOptions)
             }
           }
