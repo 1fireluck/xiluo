@@ -186,9 +186,9 @@ class _ShellState extends State<Shell> {
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
+            Positioned.fill(
               child: _error != null
                   ? Center(
                       child: Padding(
@@ -206,15 +206,20 @@ class _ShellState extends State<Shell> {
                                   strokeWidth: 2, color: Colors.white38)))
                       : WebViewWidget(controller: _web!)),
             ),
-            ClipRect(
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 450),
-                curve: Curves.easeInOutCubic,
-                offset: Offset(_drawerOpen ? 0.78 : 0, 0),
-                child: _Composer(
-                  controller: _text,
-                  focus: _focus,
-                  onSend: _send,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ClipRect(
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.easeInOutCubic,
+                  offset: Offset(_drawerOpen ? 1.0 : 0, 0),
+                  child: _Composer(
+                    controller: _text,
+                    focus: _focus,
+                    onSend: _send,
+                  ),
                 ),
               ),
             ),
