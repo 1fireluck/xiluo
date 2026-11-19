@@ -206,17 +206,16 @@ class _ShellState extends State<Shell> {
                                   strokeWidth: 2, color: Colors.white38)))
                       : WebViewWidget(controller: _web!)),
             ),
-            AnimatedPadding(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(
-                  left: _drawerOpen
-                      ? MediaQuery.of(context).size.width * 0.78
-                      : 0),
-              child: _Composer(
-                controller: _text,
-                focus: _focus,
-                onSend: _send,
+            ClipRect(
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 450),
+                curve: Curves.easeInOutCubic,
+                offset: Offset(_drawerOpen ? 0.78 : 0, 0),
+                child: _Composer(
+                  controller: _text,
+                  focus: _focus,
+                  onSend: _send,
+                ),
               ),
             ),
           ],
