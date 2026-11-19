@@ -299,3 +299,80 @@
   window.addEventListener('load', function(){ setTimeout(watch, 200); });
   window.heroInput = { hide: hide, send: send, state: state, watch: watch };
 })();
+/* ---------- heroDrawer：让 App 自己画侧栏 ---------- */
+(function(){
+  function post(m){ try { if (window.HeroUI && window.HeroUI.postMessage) window.HeroUI.postMessage(m); } catch(e){} }
+  function drawerEl(){ return document.querySelector('[class*="drawer-ac14ac"]'); }
+  function isOpen(){
+    var d = drawerEl();
+    if (!d) return false;
+    var r = d.getBoundingClientRect();
+    return r.width > 10 && r.right > 10;
+  }
+  function toggleBtn(){
+    var a = document.querySelector('button[aria-label="打开边栏"]');
+    if (a) return a;
+    return document.querySelector('button[aria-label="收起边栏"]');
+  }
+  function openDrawer(cb){
+    if (isOpen()) { cb(); return; }
+    var b = document.querySelector('button[aria-label="打开边栏"]');
+    if (!b) { cb(); return; }
+    b.click();
+    setTimeout(cb, 320);
+  }
+  function closeDrawer(){
+    var b = document.querySelector('button[aria-label="收起边栏"]');
+    if (b) b.click();
+  }
+  function collect(){
+    var d = drawerEl();
+    if (!d) return [];
+    var out = [];
+    var nodes = d.querySelectorAll('button,[role="button"],a,div');
+    for (var i = 0; i < nodes.length; i++) {
+      var e = nodes[i];
+      var cls = String(e.className);
+      if (cls.indexOf('newChat-') >= 0 || cls.indexOf('settings-') >= 0) continue;
+      if (e.children.length > 0) continue;
+      var txt = (e.textContent || '').trim();
+      if (!txt || txt.length > 60) continue;
+      out.push({ i: out.length, t: txt, el: e });
+    }
+    return out;
+  }
+  var cache = [];
+  var heroDrawer = {
+    scan: function(){
+      openDrawer(function(){
+        var items = collect();
+        cache = items.map(function(x){ return { i: x.i, t: x.t }; });
+        window.__heroItems = items;
+        post('S:' + JSON.stringify(cache));
+        setTimeout(function(){ if (!window.__heroKeepOpen) closeDrawer(); }, 60);
+      });
+      return 'scanning';
+    },
+    open: function(i){
+      openDrawer(function(){
+        var items = window.__heroItems || collect();
+        window.__heroItems = items;
+        if (items[i] && items[i].el) items[i].el.click();
+        setTimeout(closeDrawer, 120);
+      });
+      return 'ok';
+    },
+    newChat: function(){
+      var b = document.querySelector('.newChat-ac14ac');
+      if (b) b.click();
+      return 'ok';
+    },
+    settings: function(){
+      var b = document.querySelector('.settings-ac14ac');
+      if (b) b.click();
+      return 'ok';
+    },
+    close: function(){ closeDrawer(); return 'ok'; }
+  };
+  window.heroDrawer = heroDrawer;
+})();
