@@ -230,32 +230,37 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         top: true,
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: _web == null
-                        ? const Center(
-                            child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white38)))
-                        : WebViewWidget(controller: _web!),
-                  ),
-                ],
-              ),
+            Positioned.fill(
+              child: _web == null
+                  ? const Center(
+                      child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white38)))
+                  : WebViewWidget(controller: _web!),
             ),
             if (!_modalOpen)
-              _Composer(
-                controller: _text,
-                focus: _focus,
-                onSend: _send,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 80),
+                  curve: Curves.easeOut,
+                  padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom),
+                  child: _Composer(
+                    controller: _text,
+                    focus: _focus,
+                    onSend: _send,
+                  ),
+                ),
               ),
           ],
         ),
