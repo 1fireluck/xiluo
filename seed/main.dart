@@ -233,30 +233,18 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  _web == null
-                      ? const Center(
-                          child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white38)))
-                      : WebViewWidget(controller: _web!),
-                ],
-              ),
+            Positioned.fill(
+              child: _web == null
+                  ? const Center(
+                      child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white38)))
+                  : WebViewWidget(controller: _web!),
             ),
-            if (!_modalOpen)
-              _Composer(
-                controller: _text,
-                focus: _focus,
-                onSend: _send,
-                onToggle: (k) => _web?.runJavaScript(
-                    "window.heroToggle&&window.heroToggle('$k');"),
-              ),
           ],
         ),
       ),
