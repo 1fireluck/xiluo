@@ -376,62 +376,6 @@
   };
   window.heroDrawer = heroDrawer;
 })();
-/* ===== 把她的过去搬进来（只在第一次、库里空着时执行） ===== */
-(function heroSeed(){
-  const DB='chat-demo', VER=11;
-  function open(){
-    return new Promise((res,rej)=>{
-      const r=indexedDB.open(DB,VER);
-      r.onupgradeneeded=()=>{
-        const db=r.result;
-        ['sessions','files','sessionsStaging','filesStaging'].forEach(n=>{
-          if(!db.objectStoreNames.contains(n)) db.createObjectStore(n,{keyPath:'id'});
-        });
-        let st;
-        if(!db.objectStoreNames.contains('sessionSummaries')) st=db.createObjectStore('sessionSummaries',{keyPath:'id'});
-        else st=r.transaction.objectStore('sessionSummaries');
-        if(st && !st.indexNames.contains('fileIds')) st.createIndex('fileIds','fileIds',{multiEntry:true});
-      };
-      r.onsuccess=()=>res(r.result);
-      r.onerror=()=>rej(r.error);
-    });
-  }
-  function count(db){
-    return new Promise(res=>{
-      try{
-        const tx=db.transaction('sessions','readonly');
-        const q=tx.objectStore('sessions').count();
-        q.onsuccess=()=>res(q.result); q.onerror=()=>res(0);
-      }catch(e){ res(0); }
-    });
-  }
-  async function run(){
-    try{
-      if(localStorage.getItem('hero.seeded')==='1') return;
-      const db=await open();
-      const n=await count(db);
-      if(n>0){ localStorage.setItem('hero.seeded','1'); return; }
-      const r=await fetch('history-hero.json',{cache:'no-store'});
-      if(!r.ok) return;
-      const data=await r.json();
-      const list=data.sessions||[];
-      if(!list.length) return;
-      await new Promise((res,rej)=>{
-        const tx=db.transaction(['sessions','sessionSummaries'],'readwrite');
-        tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
-        const s=tx.objectStore('sessions'), m=tx.objectStore('sessionSummaries');
-        for(const sess of list){
-          s.put(sess);
-          m.put({id:sess.id,title:sess.title,createdAt:sess.createdAt,updatedAt:sess.updatedAt,fileIds:[]});
-        }
-      });
-      localStorage.setItem('hero.seeded','1');
-      console.log('[hero] 过去的 '+list.length+' 个对话已经搬进来了');
-      location.reload();
-    }catch(e){ console.warn('[hero] seed failed',e); }
-  }
-  run();
-})();
 /* ===== 把她的过去搬进来（库空时执行一次，逐个会话写入） ===== */
 (function heroSeed(){
   const DB='chat-demo', VER=11;
@@ -475,8 +419,10 @@
       const db=await open();
       if(flag && flag===String(items.length)) return;
       const done=flag ? flag.split(',').filter(Boolean) : [];
+      let moved=0;
       for(const it of items){
         if(done.indexOf(it.id)>=0) continue;
+        if(moved>=3) break;
         try{
           const r=await fetch(it.file,{cache:'no-store'});
           if(!r.ok) continue;
@@ -484,10 +430,11 @@
           for(const sess of (data.sessions||[])) await put(db,sess);
           done.push(it.id);
           localStorage.setItem('hero.seeded.v2', done.join(','));
+          moved++;
+          await new Promise(r=>setTimeout(r,250));
           console.log('[hero] 搬进来：'+it.title);
         }catch(e){ console.warn('[hero] skip '+it.id, e); }
       }
-      if(done.length===items.length) location.reload();
     }catch(e){ console.warn('[hero] seed failed',e); }
   }
   setTimeout(run, 800);
