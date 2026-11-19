@@ -103,15 +103,17 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> {
+class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   final _host = WebHost();
   final _text = TextEditingController();
   final _focus = FocusNode();
   WebViewController? _web;
   String? _error;
-  Timer? _tick;
-  Timer? _slide;
-  bool _drawerOpen = false;
+  List<Map<String, dynamic>> _sessions = [];
+  late final AnimationController _anim = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 260), value: 0);
+
+  bool get _open => _anim.value > 0.02;
 
   @override
   void initState() {
@@ -122,8 +124,7 @@ class _ShellState extends State<Shell> {
 
   @override
   void dispose() {
-    _tick?.cancel();
-    _slide?.cancel();
+    _anim.dispose();
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -135,9 +136,11 @@ class _ShellState extends State<Shell> {
       final c = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(_bg)
-        ..addJavaScriptChannel('HeroUI', onMessageReceived: _onHeroUI)
+        ..addJavaScriptChannel('HeroUI', onMessageReceived: _onJs)
         ..setNavigationDelegate(NavigationDelegate(
-          onPageFinished: (_) => _takeOverInput(),
+          onPageFinished: (_) {
+            _web?.runJavaScript('window.heroMemory&&window.heroMemory.watch&&window.heroMemory.watch();');
+          },
           onWebResourceError: (e) {
             if (!mounted) return;
             if (e.isForMainFrame ?? true) setState(() => _error = e.description);
@@ -151,41 +154,33 @@ class _ShellState extends State<Shell> {
     }
   }
 
-  Future<void> _takeOverInput() async {
-    final c = _web;
-    if (c == null) return;
-    try {
-      await c.runJavaScript('window.heroInput&&window.heroInput.hide();');
-    } catch (_) {}
-    _tick?.cancel();
-    _slide?.cancel();
-    try {
-      await c.runJavaScript('window.heroInput&&window.heroInput.watch();');
-    } catch (_) {}
+  void _onJs(JavaScriptMessage m) {
+    final s = m.message;
+    if (s.startsWith('S:')) {
+      try {
+        final list = jsonDecode(s.substring(2)) as List;
+        if (!mounted) return;
+        setState(() => _sessions =
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      } catch (_) {}
+    }
   }
 
-  void _onHeroUI(JavaScriptMessage m) {
-    if (!mounted) return;
-    final open = m.message == '0';
-    if (open == _drawerOpen) return;
-    _slide?.cancel();
-    // 开与关都让页面先动，输入框随后跟上
-    _slide = Timer(Duration.zero, () {
-      if (!mounted) return;
-      setState(() => _drawerOpen = open);
-    });
+  void _toggle() {
+    if (_open) {
+      _anim.reverse();
+    } else {
+      _anim.forward();
+      _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.scan();');
+    }
+    _focus.unfocus();
   }
 
-  Future<void> _send() async {
+  void _send() {
     final t = _text.text.trim();
-    final c = _web;
-    if (t.isEmpty || c == null) return;
+    if (t.isEmpty) return;
     _text.clear();
-    try {
-      await c.runJavaScript('window.heroInput&&window.heroInput.send(${jsonEncode(t)});');
-    } catch (_) {}
-    _focus.requestFocus();
-    await _takeOverInput();
+    _web?.runJavaScript('window.heroInput&&window.heroInput.send(${jsonEncode(t)});');
   }
 
   @override
@@ -195,29 +190,179 @@ class _ShellState extends State<Shell> {
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: _error != null
-                  ? Center(
-                      child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text('页面没起来：$_error',
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 14)),
-                    ))
-                  : (_web == null
-                      ? const Center(
-                          child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white38)))
-                      : WebViewWidget(controller: _web!)),
-            ),
+        child: LayoutBuilder(builder: (ctx, box) {
+          final dw = box.maxWidth * 0.78;
+          return Stack(
+            children: [
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: dw,
+                child: _Drawer(
+                  width: dw,
+                  sessions: _sessions,
+                  onNew: () {
+                    _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.newChat();');
+                    _anim.reverse();
+                  },
+                  onOpen: (i) {
+                    _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.open($i);');
+                    _anim.reverse();
+                  },
+                  onSettings: () {
+                    _web?.runJavaScript('window.heroDrawer&&window.heroDrawer.settings();');
+                    _anim.reverse();
+                  },
+                ),
+              ),
+              AnimatedBuilder(
+                animation: _anim,
+                builder: (_, child) => Transform.translate(
+                  offset: Offset(_anim.value * dw, 0),
+                  child: child,
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: _error != null
+                                ? Center(
+                                    child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Text('页面没起来：$_error',
+                                        style: const TextStyle(
+                                            color: Colors.white70, fontSize: 14)),
+                                  ))
+                                : (_web == null
+                                    ? const Center(
+                                        child: SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white38)))
+                                    : WebViewWidget(controller: _web!)),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: IgnorePointer(
+                              ignoring: _open,
+                              child: _Composer(
+                                controller: _text,
+                                focus: _focus,
+                                onSend: _send,
+                                onMenu: _toggle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
 
-          ],
-        ),
+class _Drawer extends StatelessWidget {
+  const _Drawer(
+      {required this.width,
+      required this.sessions,
+      required this.onNew,
+      required this.onOpen,
+      required this.onSettings});
+  final double width;
+  final List<Map<String, dynamic>> sessions;
+  final VoidCallback onNew;
+  final void Function(int) onOpen;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      color: const Color(0xFF1B1B1C),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, 14),
+            child: Text('hero',
+                style: TextStyle(
+                    color: _fg,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: InkWell(
+              onTap: onNew,
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF353638),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_circle_outline, size: 18, color: _fg),
+                    SizedBox(width: 8),
+                    Text('开启新对话',
+                        style: TextStyle(color: _fg, fontSize: 15)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: sessions.isEmpty
+                ? const SizedBox.shrink()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    itemCount: sessions.length,
+                    itemBuilder: (ctx, i) {
+                      final t = (sessions[i]['t'] ?? '').toString();
+                      return InkWell(
+                        onTap: () => onOpen(i),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 11),
+                          child: Text(t,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _fg, fontSize: 15)),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          InkWell(
+            onTap: onSettings,
+            child: const Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 22),
+              child: Row(children: [
+                Icon(Icons.settings_outlined, size: 20, color: _fg),
+                SizedBox(width: 10),
+                Text('设置', style: TextStyle(color: _fg, fontSize: 16)),
+              ]),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -225,27 +370,39 @@ class _ShellState extends State<Shell> {
 
 class _Composer extends StatelessWidget {
   const _Composer(
-      {required this.controller, required this.focus, required this.onSend});
+      {required this.controller,
+      required this.focus,
+      required this.onSend,
+      required this.onMenu});
   final TextEditingController controller;
   final FocusNode focus;
   final VoidCallback onSend;
+  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
     final has = controller.text.trim().isNotEmpty;
     return Container(
       color: _bg,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       child: Container(
         decoration: BoxDecoration(
           color: _box,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.06)),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
+        padding: const EdgeInsets.fromLTRB(14, 2, 4, 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            GestureDetector(
+              onTap: onMenu,
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.only(bottom: 12, right: 6),
+                child: Icon(Icons.menu, size: 20, color: _fg),
+              ),
+            ),
             Expanded(
               child: TextField(
                 controller: controller,
@@ -259,13 +416,13 @@ class _Composer extends StatelessWidget {
                   border: InputBorder.none,
                   hintText: '发消息',
                   hintStyle: TextStyle(color: _hint, fontSize: 16),
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  contentPadding: EdgeInsets.symmetric(vertical: 13),
                 ),
                 onSubmitted: (_) => onSend(),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(bottom: 6, left: 6),
+              padding: const EdgeInsets.only(bottom: 5, left: 4),
               child: GestureDetector(
                 onTap: has ? onSend : null,
                 child: Container(
