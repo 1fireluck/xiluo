@@ -526,7 +526,64 @@
     }catch(e){ console.warn('[hero] sync failed',e); }
   }
   /* 自动搬运已停用：改用官方「导入历史对话」 */
+  // ---------- 首次启动：把内置的「希罗」会话导入（用官方导入流程，排列一定对） ----------
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function clickByText(txt) {
+    var all = [].slice.call(document.querySelectorAll('button,[role=button],a,div,span'));
+    for (var i = all.length - 1; i >= 0; i--) {
+      var e = all[i];
+      if (e.children.length === 0 && (e.textContent || '').trim() === txt) { e.click(); return true; }
+    }
+    return false;
+  }
+  function countSessions() {
+    return new Promise(function (res) {
+      try {
+        var rq = indexedDB.open('chat-demo');
+        rq.onsuccess = function () {
+          var db = rq.result;
+          try {
+            var tr = db.transaction('sessions', 'readonly');
+            var c = tr.objectStore('sessions').count();
+            c.onsuccess = function () { res(c.result || 0); };
+            c.onerror = function () { res(-1); };
+          } catch (e) { res(-1); }
+        };
+        rq.onerror = function () { res(-1); };
+      } catch (e) { res(-1); }
+    });
+  }
+  async function autoImportSeed() {
+    try { if (localStorage.getItem('hero.seed.imported') === '1') return; } catch (e) { return; }
+    var n = await countSessions();
+    if (n > 0) { try { localStorage.setItem('hero.seed.imported', '1'); } catch (e) {} return; }
+    try {
+      var resp = await fetch('hero-seed.zip');
+      if (!resp.ok) return;
+      var blob = await resp.blob();
+      var file = new File([blob], 'hero-seed.zip', { type: 'application/zip' });
+      // 打开设置 → 数据管理 → 找到那个只接受 .zip 的输入框
+      clickByText('设置') || clickByText('打开边栏');
+      await sleep(500);
+      clickByText('设置');
+      await sleep(500);
+      clickByText('数据管理');
+      await sleep(600);
+      var inp = [].slice.call(document.querySelectorAll('input[type=file]')).filter(function (i) {
+        return /zip/i.test(i.accept || '');
+      })[0];
+      if (!inp) { console.warn('[hero] 没找到导入输入框'); return; }
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      try { localStorage.setItem('hero.seed.imported', '1'); } catch (e) {}
+      console.log('[hero] 已导入内置会话');
+    } catch (e) { console.warn('[hero] autoImport failed', e); }
+  }
+  try { window.heroAutoImport = autoImportSeed; } catch (e) {}
   /* 装内置的过去（只装一次） */
   seedPast();
+  setTimeout(function () { autoImportSeed(); }, 2500);
 
 })();
