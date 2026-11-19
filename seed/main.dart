@@ -169,15 +169,11 @@ class _ShellState extends State<Shell> {
     final open = m.message == '0';
     if (open == _drawerOpen) return;
     _slide?.cancel();
-    if (open) {
-      // 让页面先动一小会儿，输入框再跟上
-      _slide = Timer(const Duration(milliseconds: 110), () {
-        if (!mounted) return;
-        setState(() => _drawerOpen = true);
-      });
-    } else {
-      setState(() => _drawerOpen = false);
-    }
+    // 开与关都让页面先动，输入框随后跟上
+    _slide = Timer(const Duration(milliseconds: 110), () {
+      if (!mounted) return;
+      setState(() => _drawerOpen = open);
+    });
   }
 
   Future<void> _send() async {
