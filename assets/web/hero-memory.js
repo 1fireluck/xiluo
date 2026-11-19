@@ -432,3 +432,63 @@
   }
   run();
 })();
+/* ===== 把她的过去搬进来（库空时执行一次，逐个会话写入） ===== */
+(function heroSeed(){
+  const DB='chat-demo', VER=11;
+  function open(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open(DB,VER);
+      r.onupgradeneeded=()=>{
+        const db=r.result;
+        ['sessions','files','sessionsStaging','filesStaging'].forEach(n=>{
+          if(!db.objectStoreNames.contains(n)) db.createObjectStore(n,{keyPath:'id'});
+        });
+        let st;
+        if(!db.objectStoreNames.contains('sessionSummaries')) st=db.createObjectStore('sessionSummaries',{keyPath:'id'});
+        if(st && !st.indexNames.contains('fileIds')) st.createIndex('fileIds','fileIds',{multiEntry:true});
+      };
+      r.onsuccess=()=>res(r.result);
+      r.onerror=()=>rej(r.error);
+    });
+  }
+  function count(db){
+    return new Promise(res=>{
+      try{ const q=db.transaction('sessions','readonly').objectStore('sessions').count();
+        q.onsuccess=()=>res(q.result); q.onerror=()=>res(0); }catch(e){ res(0); }
+    });
+  }
+  function put(db, sess){
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(['sessions','sessionSummaries'],'readwrite');
+      tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
+      tx.objectStore('sessions').put(sess);
+      tx.objectStore('sessionSummaries').put({id:sess.id,title:sess.title,createdAt:sess.createdAt,updatedAt:sess.updatedAt,fileIds:[]});
+    });
+  }
+  async function run(){
+    try{
+      const flag=localStorage.getItem('hero.seeded.v2');
+      const idxRes=await fetch('history/index.json',{cache:'no-store'});
+      if(!idxRes.ok) return;
+      const idx=await idxRes.json();
+      const items=idx.items||[];
+      const db=await open();
+      if(flag && flag===String(items.length)) return;
+      const done=flag ? flag.split(',').filter(Boolean) : [];
+      for(const it of items){
+        if(done.indexOf(it.id)>=0) continue;
+        try{
+          const r=await fetch(it.file,{cache:'no-store'});
+          if(!r.ok) continue;
+          const data=await r.json();
+          for(const sess of (data.sessions||[])) await put(db,sess);
+          done.push(it.id);
+          localStorage.setItem('hero.seeded.v2', done.join(','));
+          console.log('[hero] 搬进来：'+it.title);
+        }catch(e){ console.warn('[hero] skip '+it.id, e); }
+      }
+      if(done.length===items.length) location.reload();
+    }catch(e){ console.warn('[hero] seed failed',e); }
+  }
+  setTimeout(run, 800);
+})();
