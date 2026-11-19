@@ -437,16 +437,11 @@
         }catch(e){ console.warn('[hero] skip '+it.id, e); }
       }
       if(moved>0){
-        try{
-          if(sessionStorage.getItem('hero.reloaded')!=='1'){
-            sessionStorage.setItem('hero.reloaded','1');
-            setTimeout(function(){ location.reload(); }, 1200);
-          }
-        }catch(e){}
+        try{ if(window.HeroUI&&HeroUI.postMessage) HeroUI.postMessage('DONE:'+moved); }catch(e){}
       }
     }catch(e){ console.warn('[hero] seed failed',e); }
   }
-  setTimeout(run, 800);
+  setTimeout(run, 3000);
 })();
 /* ===== 每天一次：把当天有更新的会话传到电脑（覆盖上一次） ===== */
 (function heroSync(){
