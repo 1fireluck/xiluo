@@ -11,6 +11,8 @@
   var LS_DAY = 'hero.days.v2';      // 一天一天的
   var LS_TURN = 'hero.turn.v2';
   var LS_LASTDAY = 'hero.lastday.v2';
+  var LS_PAST = 'hero.past.v1';     // 她记得的过去（内置）
+  var LS_PASTSEED = 'hero.pastseed.v1';
 
   var MAX_CHARS = 1200000;  // 对话正文预算（约 80-100 万 token，留安全余量）
   var MAX_MEM = 60;         // 最多记 60 条
@@ -67,6 +69,44 @@
     return out;
   }
 
+  // ---------- 内置的过去：第一次打开时把打包好的「她记得的日子」装进本地 ----------
+  function seedPast() {
+    try { if (localStorage.getItem(LS_PASTSEED) === '1') return; } catch (e) { return; }
+    if (typeof fetch !== 'function') return;
+    fetch('memory-seed.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      var items = (j && j.items) || [];
+      var arr = [];
+      for (var i = 0; i < items.length; i++) {
+        if (!items[i] || !items[i].m) continue;
+        arr.push({ d: items[i].d || '', text: (items[i].d ? items[i].d + ' ' : '') + items[i].m });
+      }
+      if (arr.length) {
+        saveArr(LS_PAST, arr);
+        try { localStorage.setItem(LS_PASTSEED, '1'); } catch (e) {}
+      }
+    }).catch(function () {});
+  }
+
+  function pickPast(text) {
+    var past = loadArr(LS_PAST);
+    if (!past.length) return [];
+    var g = grams(text || '');
+    var scored = past.map(function (p, i) {
+      var pg = grams(p.text || ''), hit = 0, k;
+      for (k in pg) if (g[k]) hit++;
+      return { p: p, s: hit, i: i };
+    });
+    scored.sort(function (a, b) { return (b.s - a.s) || (b.i - a.i); });
+    var pick = scored.slice(0, 6).map(function (x) { return x.p; });
+    pick.sort(function (a, b) { return (a.d || '') < (b.d || '') ? -1 : 1; });
+    var out = [], total = 0;
+    for (var i = 0; i < pick.length; i++) {
+      var line = '· ' + pick[i].text;
+      if (total + line.length > 800) break;
+      total += line.length; out.push(line);
+    }
+    return out;
+  }
   function daysBlock(n) {
     var d = loadArr(LS_DAY).slice(-(n || 5));
     if (!d.length) return '';
@@ -78,6 +118,10 @@
     var mem = pickMem(latestUser);
     if (mem.length) {
       out += '（这是她记得的事，只当背景，不要逐条复述，也不要用它改变说话方式）\n' + mem.join('\n') + '\n\n';
+    }
+    var past = pickPast(latestUser);
+    if (past.length) {
+      out += '（她记得的过去，只当背景，不要逐条复述，也不要用它改变说话方式）\n' + past.join('\n') + '\n\n';
     }
     var days = daysBlock(folded ? 8 : 3);
     if (days) out += '（这些天的记录）\n' + days + '\n\n';
@@ -482,4 +526,7 @@
     }catch(e){ console.warn('[hero] sync failed',e); }
   }
   /* 自动搬运已停用：改用官方「导入历史对话」 */
+  /* 装内置的过去（只装一次） */
+  seedPast();
+
 })();
