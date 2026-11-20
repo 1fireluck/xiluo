@@ -39,16 +39,31 @@ class Msg {
   bool touched = false;     // 这条被重新生成过
   List<String> alts = [];   // 重新生成的多个版本（text 是当前显示的那个）
   int cur = 0;              // 当前在第几个版本
+  String altText = '';      // 改过这条之后，另一条分支里我说的那句话
+  String altReply = '';     // 同一分支里她那句回复
+  int altCur = 0;           // 现在显示的是第几条分支（0=改后 1=改前）
   Msg(this.role, this.text, {this.thinking = ''});
   Map<String, dynamic> toJson() =>
-      {'r': role, 't': text, 'k': thinking, 'alts': alts, 'cur': cur};
+      {
+        'r': role,
+        't': text,
+        'k': thinking,
+        'alts': alts,
+        'cur': cur,
+        'at': altText,
+        'ar': altReply,
+        'ac': altCur,
+      };
   static Msg fromJson(Map<String, dynamic> j) => Msg(
         j['r'] ?? 'user',
         j['t'] ?? '',
         thinking: j['k'] ?? '',
       )
         ..alts = ((j['alts'] as List?) ?? []).map((e) => '$e').toList()
-        ..cur = (j['cur'] as int?) ?? 0;
+        ..cur = (j['cur'] as int?) ?? 0
+        ..altText = j['at'] ?? ''
+        ..altReply = j['ar'] ?? ''
+        ..altCur = (j['ac'] as int?) ?? 0;
 }
 
 class Session {
@@ -585,9 +600,21 @@ class _ChatPageState extends State<ChatPage> {
     final s = _store.cur;
     final idx = s.msgs.indexOf(m);
     if (idx < 0) return;
+    final oldText = m.text;
+    final oldReply =
+        (idx + 1 < s.msgs.length && s.msgs[idx + 1].role != 'user')
+            ? s.msgs[idx + 1].text
+            : '';
     setState(() => s.msgs.removeRange(idx, s.msgs.length));
     _store.save();
     _send(t);
+    // 重新发出去之后：新那条挂上「另一条分支」，可以在两条之间切
+    if (oldText.trim().isNotEmpty && idx < s.msgs.length) {
+      final nm = s.msgs[idx];
+      nm.altText = oldText;
+      nm.altReply = oldReply;
+      _store.save();
+    }
   }
 
   Widget _editPanel() {
@@ -1332,23 +1359,76 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _mine(Msg m, double w) => Padding(
         padding: const EdgeInsets.only(top: 16),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            key: _keyFor(m),
-            onTap: () => _beginEdit(m),
-            onLongPress: () => _mineMenu(m),
-            child: Container(
-              constraints: BoxConstraints(maxWidth: w * 0.78),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration:
-                  BoxDecoration(color: C.bubble, borderRadius: BorderRadius.circular(22)),
-              child: Text(m.text,
-                  style: const TextStyle(fontSize: 16, height: 1.5, color: C.text)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                key: _keyFor(m),
+                onTap: () => _beginEdit(m),
+                onLongPress: () => _mineMenu(m),
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: w * 0.78),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                      color: C.bubble, borderRadius: BorderRadius.circular(22)),
+                  child: Text(m.text,
+                      style:
+                          const TextStyle(fontSize: 16, height: 1.5, color: C.text)),
+                ),
+              ),
             ),
-          ),
+            if (m.altText.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 4),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  GestureDetector(
+                    onTap: () => _switchBranchOfEdit(m, -1),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Icon(CupertinoIcons.chevron_left,
+                          size: 14, color: C.sub),
+                    ),
+                  ),
+                  Text('${m.altCur + 1}/2',
+                      style: const TextStyle(fontSize: 12, color: C.sub)),
+                  GestureDetector(
+                    onTap: () => _switchBranchOfEdit(m, 1),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Icon(CupertinoIcons.chevron_right,
+                          size: 14, color: C.sub),
+                    ),
+                  ),
+                ]),
+              ),
+          ],
         ),
       );
+
+  /// 改过这条之后，在「原来的说法」和「改完的说法」两条分支之间切
+  void _switchBranchOfEdit(Msg m, int d) {
+    final s = _store.cur;
+    final i = s.msgs.indexOf(m);
+    if (i < 0) return;
+    final next = (m.altCur + (d > 0 ? 1 : 1)) % 2;
+    if (next == m.altCur) return;
+    setState(() {
+      final t = m.text;
+      m.text = m.altText;
+      m.altText = t;
+      if (i + 1 < s.msgs.length && s.msgs[i + 1].role != 'user') {
+        final r = s.msgs[i + 1];
+        final rt = r.text;
+        r.text = m.altReply;
+        m.altReply = rt;
+      }
+      m.altCur = next;
+    });
+    _store.save();
+  }
 
   Future<void> _speak(String t) async {
     try {
