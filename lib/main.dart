@@ -395,7 +395,7 @@ class _ChatPageState extends State<ChatPage> {
       if (s.msgs.isEmpty && s.id != 'archive' && seed.isNotEmpty) {
         s.msgs = List<Msg>.from(seed);
       }
-      if (s.memBlock.isEmpty) s.memBlock = _memoryBlock();
+      s.memBlock = _memoryBlock();
 
     }
     await _store.save();
