@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -496,10 +497,10 @@ class _ChatPageState extends State<ChatPage> {
           ),
           const SizedBox(height: 2),
           Row(children: [
-            _pill('回忆', CupertinoIcons.book, false, () {
+            _pill('回忆', null, false, () {
               _cancelEdit();
               _openRecall();
-            }),
+            }, glyph: const _PetalGlyph(size: 15)),
             const Spacer(),
             GestureDetector(
               onTap: _submitEdit,
@@ -1309,7 +1310,8 @@ class _ChatPageState extends State<ChatPage> {
           ),
           const SizedBox(height: 4),
           Row(children: [
-            _pill('回忆', CupertinoIcons.book, false, _openRecall),
+            _pill('回忆', null, false, _openRecall,
+                glyph: const _PetalGlyph(size: 15)),
             const Spacer(),
             GestureDetector(
               onTap: _busy ? null : () => _send(),
@@ -1331,7 +1333,8 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _pill(String label, IconData icon, bool on, VoidCallback tap) =>
+  Widget _pill(String label, IconData? icon, bool on, VoidCallback tap,
+          {Widget? glyph}) =>
       GestureDetector(
         onTap: tap,
         child: Container(
@@ -1342,7 +1345,7 @@ class _ChatPageState extends State<ChatPage> {
             border: Border.all(color: C.white12),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 14, color: on ? C.accent : C.text),
+            glyph ?? Icon(icon, size: 14, color: on ? C.accent : C.text),
             const SizedBox(width: 5),
             Text(label,
                 style: TextStyle(
@@ -1598,4 +1601,58 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
+}
+
+// 回忆的图标：一只线描的沙漏
+class _PetalGlyph extends StatelessWidget {
+  final double size;
+  final Color color;
+  const _PetalGlyph({this.size = 15, this.color = C.text});
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        size: Size(size, size),
+        painter: _PetalPainter(color),
+      );
+}
+
+class _PetalPainter extends CustomPainter {
+  final Color color;
+  _PetalPainter(this.color);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final p = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final left = w * 0.22, right = w * 0.78;
+    final top = h * 0.14, bottom = h * 0.86;
+    final mid = h * 0.5;
+
+    // 上下两条横梁
+    canvas.drawLine(Offset(left, top), Offset(right, top), p);
+    canvas.drawLine(Offset(left, bottom), Offset(right, bottom), p);
+
+    // 两个三角，腰是弧的
+    final topPath = Path()
+      ..moveTo(left, top)
+      ..quadraticBezierTo(w * 0.34, h * 0.34, w * 0.5, mid)
+      ..quadraticBezierTo(w * 0.66, h * 0.34, right, top);
+    final bottomPath = Path()
+      ..moveTo(left, bottom)
+      ..quadraticBezierTo(w * 0.34, h * 0.66, w * 0.5, mid)
+      ..quadraticBezierTo(w * 0.66, h * 0.66, right, bottom);
+    canvas.drawPath(topPath, p);
+    canvas.drawPath(bottomPath, p);
+
+    // 上半个里的一点点沙
+    final sand = Paint()..color = color;
+    canvas.drawCircle(Offset(w * 0.5, h * 0.40), w * 0.055, sand);
+  }
+
+  @override
+  bool shouldRepaint(_PetalPainter old) => old.color != color;
 }
