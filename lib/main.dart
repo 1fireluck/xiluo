@@ -1091,28 +1091,30 @@ class _ChatPageState extends State<ChatPage> {
 
     if (_editing != null) {
       final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
-      return Column(
+      // 编辑中：整块对话变暗，被改的那条浮在正中间（不是贴底，也不是贴顶）
+      return Stack(
         children: [
-          Expanded(
-            child: before.isEmpty
-                ? const SizedBox.shrink()
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                    itemCount: before.length,
-                    itemBuilder: (ctx, i) => Opacity(
-                      opacity: 0.35,
-                      child: before[i].role == 'user'
-                          ? _mine(before[i], w)
-                          : _hers(before[i], i, before.length),
-                    ),
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: msgs.last.role == 'user'
-                ? _mine(msgs.last, w)
-                : _hers(msgs.last, msgs.length - 1, msgs.length),
+          if (before.isNotEmpty)
+            Positioned.fill(
+              child: ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                itemCount: before.length,
+                itemBuilder: (ctx, i) => Opacity(
+                  opacity: 0.35,
+                  child: before[i].role == 'user'
+                      ? _mine(before[i], w)
+                      : _hers(before[i], i, before.length),
+                ),
+              ),
+            ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              child: msgs.last.role == 'user'
+                  ? _mine(msgs.last, w)
+                  : _hers(msgs.last, msgs.length - 1, msgs.length),
+            ),
           ),
         ],
       );
