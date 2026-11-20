@@ -236,7 +236,7 @@ class HeroApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '希罗',
+      title: 'Hiro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -319,8 +319,10 @@ class _ChatPageState extends State<ChatPage> {
     }
     await _store.save();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _toBottom();
-      if (mounted) setState(() => _ready = true);
+      _jumpBottom();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _ready = true);
+      });
     });
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
       await _openArchive();
@@ -338,6 +340,26 @@ class _ChatPageState extends State<ChatPage> {
     _scroll.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  void _jumpBottom() {
+    if (!_scroll.hasClients) return;
+    _scroll.jumpTo(_scroll.position.maxScrollExtent);
+  }
+
+  // 编辑面板升降的那 260ms 里，让列表每一帧都贴住底部
+  // → 被修改的那条消息和输入框是同一个动作升上去的
+  void _pinToBottom([int ms = 320]) {
+    final end = DateTime.now().add(Duration(milliseconds: ms));
+    void tick() {
+      if (!mounted) return;
+      _jumpBottom();
+      if (DateTime.now().isBefore(end)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => tick());
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => tick());
   }
 
   void _toBottom([bool animate = false]) {
@@ -437,18 +459,9 @@ class _ChatPageState extends State<ChatPage> {
       _editC.text = keep;
       _editC.selection = TextSelection.collapsed(offset: keep.length);
     });
-    // 那条消息滑到输入栏正上方贴住（固定高度），像官方那样
+    _pinToBottom();
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      final ctx = _msgKeys[m]?.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(ctx,
-            alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-            alignment: 1.0,
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic);
-      }
-      _editFocus.requestFocus();
+      if (mounted) _editFocus.requestFocus();
     });
   }
 
@@ -456,6 +469,7 @@ class _ChatPageState extends State<ChatPage> {
     _editFocus.unfocus();
     _editIdx = -1;
     setState(() => _editing = null); // draft 留着，下次点进来还在
+    _pinToBottom();
   }
 
   void _submitEdit() {
@@ -856,12 +870,21 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: C.bg,
       resizeToAvoidBottomInset: true,
-      body: !_ready
-          ? const Center(child: CircularProgressIndicator(color: C.accent))
-          : Stack(children: [
+      body: Stack(children: [
               Column(children: [
                 _topBar(),
-                Expanded(child: _list(w)),
+                Expanded(
+                  child: Stack(children: [
+                    Opacity(opacity: _ready ? 1 : 0, child: _list(w)),
+                    if (!_ready)
+                      const Center(
+                          child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: C.sub))),
+                  ]),
+                ),
                 if (_store.curId == 'archive')
                   SafeArea(
                     top: false,
@@ -873,18 +896,11 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 230),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, anim) => SizeTransition(
-                      sizeFactor: anim,
-                      axisAlignment: -1,
-                      child: FadeTransition(opacity: anim, child: child),
-                    ),
-                    child: _editing == null
-                        ? KeyedSubtree(key: const ValueKey('c'), child: _composer())
-                        : KeyedSubtree(key: const ValueKey('e'), child: _editPanel()),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _editing == null ? _composer() : _editPanel(),
                   ),
               ]),
               if (_drawer)
@@ -921,7 +937,7 @@ class _ChatPageState extends State<ChatPage> {
             child: Text(
               !_ready
                   ? ''
-                  : (_store.curId == 'archive' ? '她的过去' : '希罗'),
+                  : (_store.curId == 'archive' ? '她的过去' : 'Hiro'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -949,13 +965,6 @@ class _ChatPageState extends State<ChatPage> {
     // 这样那条消息自然贴到输入栏正上方，位置固定。
     if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
       msgs = msgs.sublist(0, _editIdx + 1);
-    }
-    if (!_ready && !_store.archiveLoaded) {
-      return const Center(
-          child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2, color: C.sub)));
     }
     if (msgs.isEmpty) {
       return Center(
@@ -1481,7 +1490,7 @@ class _ChatPageState extends State<ChatPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
             child: Row(children: const [
-              Text('希罗',
+              Text('Hiro',
                   style: TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w600, color: C.text)),
             ]),
