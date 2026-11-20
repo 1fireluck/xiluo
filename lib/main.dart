@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -318,12 +319,7 @@ class _ChatPageState extends State<ChatPage> {
       }
     }
     await _store.save();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _jumpBottom();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _ready = true);
-      });
-    });
+    _settleBottom();
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
       await _openArchive();
     }
@@ -347,9 +343,22 @@ class _ChatPageState extends State<ChatPage> {
     _scroll.jumpTo(_scroll.position.maxScrollExtent);
   }
 
+  // 首屏：等列表真的排完了再跳到底（否则会停在最上面、看起来一片空）
+  void _settleBottom([int tries = 0]) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_scroll.hasClients && _scroll.position.maxScrollExtent > 0) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        if (!_ready) setState(() => _ready = true);
+        return;
+      }
+      if (tries < 40) _settleBottom(tries + 1);
+    });
+  }
+
   // 编辑面板升降的那 260ms 里，让列表每一帧都贴住底部
   // → 被修改的那条消息和输入框是同一个动作升上去的
-  void _pinToBottom([int ms = 320]) {
+  void _pinToBottom([int ms = 150]) {
     final end = DateTime.now().add(Duration(milliseconds: ms));
     void tick() {
       if (!mounted) return;
@@ -876,6 +885,14 @@ class _ChatPageState extends State<ChatPage> {
                 Expanded(
                   child: Stack(children: [
                     Opacity(opacity: _ready ? 1 : 0, child: _list(w)),
+                    if (_editing != null)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _cancelEdit,
+                          child: Container(color: Colors.transparent),
+                        ),
+                      ),
                     if (!_ready)
                       const Center(
                           child: SizedBox(
@@ -897,8 +914,8 @@ class _ChatPageState extends State<ChatPage> {
                   )
                 else
                   AnimatedSize(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutCubic,
+                    duration: const Duration(milliseconds: 100),
+                    curve: Curves.easeOut,
                     alignment: Alignment.topCenter,
                     child: _editing == null ? _composer() : _editPanel(),
                   ),
@@ -990,7 +1007,11 @@ class _ChatPageState extends State<ChatPage> {
           );
         }
         final m = msgs[i];
-        return m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
+        final row = m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
+        if (_editing != null && i != _editIdx) {
+          return Opacity(opacity: 0.35, child: row);
+        }
+        return row;
       },
     );
   }
@@ -1410,11 +1431,14 @@ class _ChatPageState extends State<ChatPage> {
     final has = _input.text.trim().isNotEmpty;
     return SafeArea(
       top: false,
-      child: Container(
+      child: ClipRect(
+          child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
         margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
         padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
         decoration: BoxDecoration(
-          color: C.bubble,
+          color: const Color(0xD92C2C2E),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: C.white06),
         ),
@@ -1455,6 +1479,8 @@ class _ChatPageState extends State<ChatPage> {
             const SizedBox(width: 2),
           ]),
         ]),
+          ),
+        ),
       ),
     );
   }
