@@ -443,14 +443,14 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _toBottom([bool animate = false]) {
+    // 列表是 reverse 的：offset 0 就是最新那一头（底），不能再取 maxScrollExtent
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      final max = _scroll.position.maxScrollExtent;
       if (animate) {
-        _scroll.animateTo(max,
+        _scroll.animateTo(0,
             duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
       } else {
-        _scroll.jumpTo(max);
+        _scroll.jumpTo(0);
       }
     });
   }
@@ -556,7 +556,7 @@ class _ChatPageState extends State<ChatPage> {
     // 不会出现「先出现文字、再滑上去」的两段动作。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
-      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      _scroll.jumpTo(0);
     });
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _editFocus.requestFocus();
