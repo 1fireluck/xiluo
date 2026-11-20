@@ -622,8 +622,7 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
           ]),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 7 * 24.0),
+          ClipRect(
             child: Scrollbar(
               controller: _editScroll,
               thumbVisibility: _barOn,
@@ -640,7 +639,7 @@ class _ChatPageState extends State<ChatPage> {
                 decoration: const InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.fromLTRB(0, 6, 0, 6),
+                  contentPadding: EdgeInsets.fromLTRB(0, 2, 0, 2),
                 ),
                 onChanged: (v) {
                   _editing?.draft = v.trim() == _editing?.text ? '' : v;
