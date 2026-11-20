@@ -64,6 +64,7 @@ flutter:
     - assets/history.json
     - assets/voice.json
     - assets/history_full.json
+    - assets/days_seed.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

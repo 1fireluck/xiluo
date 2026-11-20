@@ -288,6 +288,20 @@ class _ChatPageState extends State<ChatPage> {
     final seed = _store.history.length > 50
         ? _store.history.sublist(_store.history.length - 50)
         : List<Msg>.from(_store.history);
+    if (_store.days.isEmpty) {
+      try {
+        final raw = await rootBundle.loadString('assets/days_seed.json');
+        final list = (jsonDecode(raw) as List).cast<dynamic>();
+        _store.days = list
+            .map((e) => {
+                  'd': '${(e as Map)['d'] ?? ''}',
+                  's': '${e['s'] ?? ''}',
+                })
+            .where((e) => e['d']!.isNotEmpty)
+            .toList();
+      } catch (_) {}
+    }
+
     for (final s in _store.sessions) {
       if (s.memBlock.isEmpty) s.memBlock = _memoryBlock();
       if (s.msgs.isEmpty && s.id != 'archive' && seed.isNotEmpty) {
@@ -482,7 +496,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
           const SizedBox(height: 2),
           Row(children: [
-            _pill('回议', CupertinoIcons.time, false, () {
+            _pill('回忆', CupertinoIcons.book, false, () {
               _cancelEdit();
               _openRecall();
             }),
@@ -508,11 +522,10 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // ---- 回议：最近 50 条她说过的话 ----
+  // ---- 回忆：希罗酱的记忆录 ----
   void _openRecall() {
-    final tail = _store.history.length > 50
-        ? _store.history.sublist(_store.history.length - 50)
-        : List<Msg>.from(_store.history);
+    final days = _store.days.reversed.toList();
+    final facts = _store.memory.reversed.toList();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: C.side,
@@ -520,38 +533,57 @@ class _ChatPageState extends State<ChatPage> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (ctx) => SizedBox(
-        height: MediaQuery.of(ctx).size.height * 0.72,
+        height: MediaQuery.of(ctx).size.height * 0.78,
         child: Column(children: [
-          const SizedBox(height: 14),
-          const Text('回议 · 最近 50 条',
+          const SizedBox(height: 16),
+          const Text('希罗酱的记忆录',
               style: TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: C.text)),
-          const SizedBox(height: 8),
+                  fontSize: 16, fontWeight: FontWeight.w600, color: C.text)),
+          const SizedBox(height: 4),
+          Text(days.isEmpty && facts.isEmpty ? '还没有记下什么' : '希罗记着的，都在这里',
+              style: const TextStyle(fontSize: 12, color: C.sub)),
+          const SizedBox(height: 10),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              itemCount: tail.length,
-              itemBuilder: (c, i) {
-                final m = tail[i];
-                final me = m.role == 'user';
-                return Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Column(
-                    crossAxisAlignment:
-                        me ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                    children: [
-                      Text(me ? '艾玛' : '希罗',
-                          style: const TextStyle(fontSize: 11.5, color: C.sub)),
-                      const SizedBox(height: 3),
-                      Text(m.text,
-                          style: TextStyle(
-                              fontSize: 14.5,
-                              height: 1.65,
-                              color: me ? C.text : const Color(0xFFE6E6E8))),
-                    ],
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
+              children: [
+                for (final d in days)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(d['d'] ?? '',
+                            style: const TextStyle(
+                                fontSize: 11.5,
+                                letterSpacing: 0.6,
+                                color: C.sub)),
+                        const SizedBox(height: 4),
+                        Text(d['s'] ?? '',
+                            style: const TextStyle(
+                                fontSize: 14.5,
+                                height: 1.75,
+                                color: Color(0xFFE6E6E8))),
+                      ],
+                    ),
                   ),
-                );
-              },
+                if (facts.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6, bottom: 8),
+                    child: Text('她记下的小事',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: C.sub)),
+                  ),
+                for (final f in facts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('· $f',
+                        style: const TextStyle(
+                            fontSize: 14, height: 1.7, color: C.sub)),
+                  ),
+              ],
             ),
           ),
         ]),
@@ -1277,7 +1309,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
           const SizedBox(height: 4),
           Row(children: [
-            _pill('回议', CupertinoIcons.time, false, _openRecall),
+            _pill('回忆', CupertinoIcons.book, false, _openRecall),
             const Spacer(),
             GestureDetector(
               onTap: _busy ? null : () => _send(),
