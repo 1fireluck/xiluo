@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -32,6 +33,8 @@ class Msg {
   String role; // user / assistant
   String text;
   String thinking;
+  String draft = '';        // 还没发出去的修改，退出再点要保留
+  bool touched = false;     // 这条被重新生成过
   Msg(this.role, this.text, {this.thinking = ''});
   Map<String, dynamic> toJson() => {'r': role, 't': text, 'k': thinking};
   static Msg fromJson(Map<String, dynamic> j) =>
@@ -54,7 +57,7 @@ class Session {
       };
   static Session fromJson(Map<String, dynamic> j) => Session(
         j['id'],
-        j['title'] ?? '新对话',
+        j['title'] ?? '聊天......',
         j['created'] ?? 0,
         (j['msgs'] as List? ?? []).map((e) => Msg.fromJson(e)).toList(),
         j['mem'] ?? '',
@@ -99,7 +102,7 @@ class Store {
       } catch (_) {}
     }
     if (sessions.isEmpty) {
-      final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '新对话',
+      final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
           DateTime.now().millisecondsSinceEpoch);
       sessions.add(s);
       curId = s.id;
@@ -109,7 +112,7 @@ class Store {
   }
 
   void _seedMemoryless() {
-    final s = Session('1', '新对话', 0);
+    final s = Session('1', '聊天......', 0);
     sessions.add(s);
     curId = s.id;
   }
@@ -224,7 +227,7 @@ class HeroApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'hero',
+      title: '希罗',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -253,6 +256,9 @@ class _ChatPageState extends State<ChatPage> {
 
   bool _ready = false;
   bool _drawer = false;
+  Msg? _editing;
+  final _editC = TextEditingController();
+  final _editFocus = FocusNode();
   bool _busy = false;
   String _err = '';
   int _turn = 0;
@@ -279,9 +285,16 @@ class _ChatPageState extends State<ChatPage> {
     } catch (_) {}
     await _store.init();
     if (!mounted) return;
+    final seed = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
+        : List<Msg>.from(_store.history);
     for (final s in _store.sessions) {
       if (s.memBlock.isEmpty) s.memBlock = _memoryBlock();
+      if (s.msgs.isEmpty && s.id != 'archive' && seed.isNotEmpty) {
+        s.msgs = List<Msg>.from(seed);
+      }
     }
+    await _store.save();
     setState(() => _ready = true);
     _toBottom();
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
@@ -294,6 +307,8 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _editC.dispose();
+    _editFocus.dispose();
     _input.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -378,6 +393,170 @@ class _ChatPageState extends State<ChatPage> {
       _store.memory = _store.memory.sublist(_store.memory.length - 200);
     }
     await _store.save();
+  }
+
+
+
+  void _beginEdit(Msg m) {
+    if (_busy || m.role != 'user') return;
+    final keep = m.draft.isNotEmpty ? m.draft : m.text;
+    setState(() {
+      _editing = m;
+      _editC.text = keep;
+      _editC.selection = TextSelection.collapsed(offset: keep.length);
+    });
+    Future.delayed(const Duration(milliseconds: 280), () {
+      if (mounted) _editFocus.requestFocus();
+    });
+  }
+
+  void _cancelEdit() {
+    _editFocus.unfocus();
+    setState(() => _editing = null); // draft 留着，下次点进来还在
+  }
+
+  void _submitEdit() {
+    final m = _editing;
+    if (m == null) return;
+    final t = _editC.text.trim();
+    _editFocus.unfocus();
+    m.draft = '';
+    setState(() => _editing = null);
+    if (t.isEmpty) return;
+    final s = _store.cur;
+    final idx = s.msgs.indexOf(m);
+    if (idx < 0) return;
+    setState(() => s.msgs.removeRange(idx, s.msgs.length));
+    _store.save();
+    _send(t);
+  }
+
+  Widget _editPanel() {
+    final has = _editC.text.trim().isNotEmpty;
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+        decoration: BoxDecoration(
+          color: C.bubble,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: C.white06),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            const Text('修改输入',
+                style: TextStyle(fontSize: 12.5, color: C.sub)),
+            const Spacer(),
+            GestureDetector(
+              onTap: _cancelEdit,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: C.white12,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(CupertinoIcons.clear_thick,
+                    size: 13, color: C.sub),
+              ),
+            ),
+          ]),
+          TextField(
+            controller: _editC,
+            focusNode: _editFocus,
+            minLines: 1,
+            maxLines: 6,
+            cursorColor: C.accent,
+            style: const TextStyle(fontSize: 16, height: 1.5, color: C.text),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.fromLTRB(0, 6, 0, 6),
+            ),
+            onChanged: (v) {
+              _editing?.draft = v.trim() == _editing?.text ? '' : v;
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 2),
+          Row(children: [
+            _pill('回议', CupertinoIcons.time, false, () {
+              _cancelEdit();
+              _openRecall();
+            }),
+            const Spacer(),
+            GestureDetector(
+              onTap: _submitEdit,
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: has ? C.accent : const Color(0xFF3A3A3D),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(CupertinoIcons.arrow_up,
+                    size: 18,
+                    color: has ? Colors.white : const Color(0xFF8A8A8E)),
+              ),
+            ),
+            const SizedBox(width: 2),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  // ---- 回议：最近 50 条她说过的话 ----
+  void _openRecall() {
+    final tail = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
+        : List<Msg>.from(_store.history);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.side,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.of(ctx).size.height * 0.72,
+        child: Column(children: [
+          const SizedBox(height: 14),
+          const Text('回议 · 最近 50 条',
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600, color: C.text)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              itemCount: tail.length,
+              itemBuilder: (c, i) {
+                final m = tail[i];
+                final me = m.role == 'user';
+                return Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Column(
+                    crossAxisAlignment:
+                        me ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      Text(me ? '艾玛' : '希罗',
+                          style: const TextStyle(fontSize: 11.5, color: C.sub)),
+                      const SizedBox(height: 3),
+                      Text(m.text,
+                          style: TextStyle(
+                              fontSize: 14.5,
+                              height: 1.65,
+                              color: me ? C.text : const Color(0xFFE6E6E8))),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   // ---- 把旧窗口里的话带回来 ----
@@ -491,15 +670,15 @@ class _ChatPageState extends State<ChatPage> {
       _err = '';
       s.msgs.add(Msg('user', text));
       s.msgs.add(Msg('assistant', ''));
-      if (s.title == '新对话' && s.msgs.length <= 2) {
-        s.title = text.length > 14 ? text.substring(0, 14) : text;
-      }
       _input.clear();
     });
     _toBottom(true);
     final reply = s.msgs.last;
+    final cut = _store.history.length > 50
+        ? _store.history.length - 50
+        : 0;
     final history = [
-      ..._store.history,
+      ..._store.history.sublist(0, cut),
       ...s.msgs.sublist(0, s.msgs.length - 1),
     ];
     await Api.stream(
@@ -538,8 +717,11 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _newChat() {
-    final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '新对话',
-        DateTime.now().millisecondsSinceEpoch, null, _memoryBlock());
+    final seed = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
+        : List<Msg>.from(_store.history);
+    final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
+        DateTime.now().millisecondsSinceEpoch, seed, _memoryBlock());
     setState(() {
       _store.sessions.insert(0, s);
       _store.curId = s.id;
@@ -578,11 +760,24 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  _composer(),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 230),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, anim) => SizeTransition(
+                      sizeFactor: anim,
+                      axisAlignment: -1,
+                      child: FadeTransition(opacity: anim, child: child),
+                    ),
+                    child: _editing == null
+                        ? KeyedSubtree(key: const ValueKey('c'), child: _composer())
+                        : KeyedSubtree(key: const ValueKey('e'), child: _editPanel()),
+                  ),
               ]),
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => setState(() => _drawer = false),
                     child: Container(color: Colors.black.withOpacity(0.45)),
                   ),
@@ -607,19 +802,20 @@ class _ChatPageState extends State<ChatPage> {
         height: 48,
         child: Row(children: [
           const SizedBox(width: 6),
-          _iconBtn(Icons.menu, () => setState(() => _drawer = !_drawer)),
+          _iconBtn(CupertinoIcons.bars, () => setState(() => _drawer = !_drawer)),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
-              _ready ? _store.cur.title : '',
+              !_ready
+                  ? ''
+                  : (_store.curId == 'archive' ? '她的过去' : '希罗'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 17, fontWeight: FontWeight.w600, color: C.text, letterSpacing: 0.2),
             ),
           ),
-          if (_store.curId == 'archive') _iconBtn(Icons.search, _searchArchive),
-          _iconBtn(Icons.settings_outlined, _openSettings),
+          if (_store.curId == 'archive') _iconBtn(CupertinoIcons.search, _searchArchive),
           const SizedBox(width: 6),
         ]),
       ),
@@ -702,7 +898,7 @@ class _ChatPageState extends State<ChatPage> {
         }
         return Padding(
           padding: const EdgeInsets.only(top: 14),
-          child: SelectableText.rich(
+          child: Text.rich(
             TextSpan(children: _rich(m.text)),
             style: const TextStyle(fontSize: 16, height: 1.75, color: C.text),
           ),
@@ -769,7 +965,7 @@ class _ChatPageState extends State<ChatPage> {
                     decoration: InputDecoration(
                       hintText: '在她的过去里找一句话',
                       hintStyle: const TextStyle(color: Color(0xFF6B6B70)),
-                      prefixIcon: const Icon(Icons.search, color: C.sub, size: 20),
+                      prefixIcon: const Icon(CupertinoIcons.search, color: C.sub, size: 19),
                       filled: true,
                       fillColor: C.bubble,
                       border: OutlineInputBorder(
@@ -832,6 +1028,7 @@ class _ChatPageState extends State<ChatPage> {
         child: Align(
           alignment: Alignment.centerRight,
           child: GestureDetector(
+            onTap: () => _beginEdit(m),
             onLongPress: () => _mineMenu(m),
             child: Container(
               constraints: BoxConstraints(maxWidth: w * 0.78),
@@ -919,12 +1116,15 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _hers(Msg m, int idx, int total) {
-    return Padding(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: (d) => _herMenu(m, d.globalPosition),
+      child: Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (m.thinking.isNotEmpty) _thinkBox(m.thinking),
         if (m.text.isNotEmpty)
-          SelectableText.rich(
+          Text.rich(
             TextSpan(children: _rich(m.text)),
             style: const TextStyle(fontSize: 16, height: 1.75, color: C.text),
           ),
@@ -936,18 +1136,47 @@ class _ChatPageState extends State<ChatPage> {
                 width: 14,
                 child: CircularProgressIndicator(strokeWidth: 1.6, color: C.sub)),
           ),
-        if (m.text.isNotEmpty)
+        if (m.text.isNotEmpty && m.touched && idx == total - 1)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Row(children: [
-              _act(Icons.copy_rounded, '复制', () => _copy(m.text)),
-              _act(Icons.volume_up_outlined, '朗读', () => _speak(m.text)),
-              _act(Icons.refresh_rounded, '重新生成',
-                  idx == total - 1 ? _regenerate : () {}),
-            ]),
+            child: _act(CupertinoIcons.arrow_clockwise, '重新生成', _regenerate),
           ),
       ]),
+      ),
     );
+  }
+
+  // 长按她的消息：在手指按的位置弹出，只有「重新生成」
+  Future<void> _herMenu(Msg m, Offset p) async {
+    if (_busy) return;
+    final size = MediaQuery.of(context).size;
+    final v = await showMenu<String>(
+      context: context,
+      color: C.side,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      position: RelativeRect.fromLTRB(
+          p.dx, p.dy, size.width - p.dx, size.height - p.dy),
+      items: [
+        PopupMenuItem<String>(
+          value: 'regen',
+          height: 42,
+          child: Row(children: const [
+            Icon(CupertinoIcons.arrow_clockwise, size: 17, color: C.text),
+            SizedBox(width: 10),
+            Text('重新生成', style: TextStyle(fontSize: 15, color: C.text)),
+          ]),
+        ),
+      ],
+    );
+    if (v == 'regen') {
+      final s = _store.cur;
+      if (s.msgs.isNotEmpty && s.msgs.last.role == 'assistant') {
+        s.msgs.last.touched = true;
+      }
+      await _regenerate();
+      await _store.save();
+    }
   }
 
   Widget _act(IconData i, String tip, VoidCallback f) => InkWell(
@@ -1023,8 +1252,8 @@ class _ChatPageState extends State<ChatPage> {
     return SafeArea(
       top: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+        margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
         decoration: BoxDecoration(
           color: C.bubble,
           borderRadius: BorderRadius.circular(24),
@@ -1048,17 +1277,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
           const SizedBox(height: 4),
           Row(children: [
-            _pill('深度思考', Icons.bubble_chart_outlined, _store.thinking,
-                () => setState(() {
-                      _store.thinking = !_store.thinking;
-                      _store.save();
-                    })),
-            const SizedBox(width: 8),
-            _pill('智能搜索', Icons.language, false, () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('联网搜索还在做'),
-                  duration: Duration(milliseconds: 900)));
-            }),
+            _pill('回议', CupertinoIcons.time, false, _openRecall),
             const Spacer(),
             GestureDetector(
               onTap: _busy ? null : () => _send(),
@@ -1069,7 +1288,7 @@ class _ChatPageState extends State<ChatPage> {
                   color: has ? C.accent : const Color(0xFF3A3A3D),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(_busy ? Icons.stop_rounded : Icons.arrow_upward,
+                child: Icon(_busy ? CupertinoIcons.square_fill : CupertinoIcons.arrow_up,
                     size: 19, color: has ? Colors.white : const Color(0xFF8A8A8E)),
               ),
             ),
@@ -1110,7 +1329,7 @@ class _ChatPageState extends State<ChatPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
             child: Row(children: const [
-              Text('hero',
+              Text('希罗',
                   style: TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w600, color: C.text)),
             ]),
@@ -1129,9 +1348,9 @@ class _ChatPageState extends State<ChatPage> {
                 child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.add_circle_outline, size: 17, color: C.text),
+                      Icon(CupertinoIcons.plus_circle, size: 18, color: C.text),
                       SizedBox(width: 7),
-                      Text('开启新对话',
+                      Text('希罗',
                           style: TextStyle(fontSize: 14, color: C.text)),
                     ]),
               ),
@@ -1197,7 +1416,7 @@ class _ChatPageState extends State<ChatPage> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
               child: Row(children: const [
-                Icon(Icons.settings_outlined, size: 18, color: C.text),
+                Icon(CupertinoIcons.gear, size: 17, color: C.text),
                 SizedBox(width: 8),
                 Text('设置', style: TextStyle(fontSize: 14, color: C.text)),
               ]),
