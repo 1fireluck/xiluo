@@ -117,7 +117,9 @@ class Store {
       sessions.add(s);
       curId = s.id;
     }
-    if (!sessions.any((s) => s.id == curId)) curId = sessions.first.id;
+    if (sessions.isNotEmpty && !sessions.any((s) => s.id == curId)) {
+      curId = sessions.first.id;
+    }
     await save();
   }
 
@@ -141,8 +143,19 @@ class Store {
     }));
   }
 
-  Session get cur =>
-      sessions.firstWhere((s) => s.id == curId, orElse: () => sessions.first);
+  Session get cur {
+    if (sessions.isEmpty) {
+      final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
+          DateTime.now().millisecondsSinceEpoch);
+      sessions.add(s);
+      curId = s.id;
+    }
+    for (final s in sessions) {
+      if (s.id == curId) return s;
+    }
+    curId = sessions.first.id;
+    return sessions.first;
+  }
 }
 
 // ================= API =================
@@ -230,7 +243,16 @@ class Api {
 }
 
 // ================= 主界面 =================
-void main() => runApp(const HeroApp());
+final ValueNotifier<String> gErr = ValueNotifier<String>('');
+
+void main() {
+  FlutterError.onError = (FlutterErrorDetails d) {
+    gErr.value = 'FE: ' + d.exceptionAsString();
+  };
+  runZonedGuarded(() => runApp(const HeroApp()), (Object e, StackTrace st) {
+    gErr.value = 'ZE: ' + e.toString();
+  });
+}
 
 class HeroApp extends StatelessWidget {
   const HeroApp({super.key});
@@ -247,6 +269,29 @@ class HeroApp extends StatelessWidget {
         highlightColor: Colors.transparent,
       ),
       home: const ChatPage(),
+      builder: (BuildContext ctx, Widget? child) => Stack(children: <Widget>[
+        if (child != null) child,
+        ValueListenableBuilder<String>(
+          valueListenable: gErr,
+          builder: (BuildContext c, String v, Widget? _) => v.isEmpty
+              ? const SizedBox.shrink()
+              : Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    color: const Color(0xEE8B1A1A),
+                    padding: const EdgeInsets.all(10),
+                    child: Text(v,
+                        maxLines: 6,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            height: 1.4)),
+                  ),
+                ),
+        ),
+      ]),
     );
   }
 }
@@ -278,6 +323,9 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     _input.addListener(() => setState(() {}));
     _boot();
+    Timer(const Duration(seconds: 4), () {
+      if (mounted && !_ready) setState(() => _ready = true);
+    });
   }
 
   Future<void> _boot() async {
@@ -760,6 +808,10 @@ class _ChatPageState extends State<ChatPage> {
       _input.clear();
     });
     _toBottom(true);
+    if (s.msgs.isEmpty) {
+      setState(() => _busy = false);
+      return;
+    }
     final reply = s.msgs.last;
     final cut = _store.history.length > 50
         ? _store.history.length - 50
