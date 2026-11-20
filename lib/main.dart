@@ -374,9 +374,6 @@ class _ChatPageState extends State<ChatPage> {
     } catch (_) {}
     await _store.init();
     if (!mounted) return;
-    final seed = _store.history.length > 50
-        ? _store.history.sublist(_store.history.length - 50)
-        : List<Msg>.from(_store.history);
     if (_store.days.isEmpty) {
       try {
         final raw = await rootBundle.loadString('assets/days_seed.json');
@@ -393,9 +390,7 @@ class _ChatPageState extends State<ChatPage> {
 
     for (final s in _store.sessions) {
       if (s.memBlock.isEmpty) s.memBlock = _memoryBlock();
-      if (s.msgs.isEmpty && s.id != 'archive' && seed.isNotEmpty) {
-        s.msgs = List<Msg>.from(seed);
-      }
+
     }
     await _store.save();
     _settleBottom();
@@ -458,6 +453,8 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _toBottom([bool animate = false]) {
+    // 生成过程中：他要是自己翻上去了，就不强制把他拉回底部
+    if (!animate && !_followBottom) return;
     // 列表是 reverse 的：offset 0 就是最新那一头（底），不能再取 maxScrollExtent
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -545,6 +542,7 @@ class _ChatPageState extends State<ChatPage> {
 
   int _editIdx = -1;
   bool _showJump = false;   // 离底部有点远了，右下角出现「回到底下」
+  bool _followBottom = true; // 用户是不是还贴着底部；翻上去了就不再把他拽回来
   final _editScroll = ScrollController();
   bool _barOn = false;
   Timer? _barTimer;
@@ -1000,11 +998,9 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _newChat() {
-    final seed = _store.history.length > 50
-        ? _store.history.sublist(_store.history.length - 50)
-        : List<Msg>.from(_store.history);
+    // 新对话就是空的——历史不往新会话里搬，回到原始状态
     final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
-        DateTime.now().millisecondsSinceEpoch, seed, _memoryBlock());
+        DateTime.now().millisecondsSinceEpoch, <Msg>[], _memoryBlock());
     setState(() {
       _store.sessions.insert(0, s);
       _store.curId = s.id;
@@ -1036,7 +1032,12 @@ class _ChatPageState extends State<ChatPage> {
                       child: NotificationListener<ScrollNotification>(
                         onNotification: (n) {
                           // 列表是 reverse 的：0 就是最底
-                          final far = n.metrics.pixels > 240;
+                          final px = n.metrics.pixels;
+                          final far = px > 240;
+                          final atBottom = px < 60;
+                          if (atBottom != _followBottom) {
+                            _followBottom = atBottom;
+                          }
                           if (far != _showJump && mounted) {
                             setState(() => _showJump = far);
                           }
@@ -1051,6 +1052,7 @@ class _ChatPageState extends State<ChatPage> {
                         bottom: 12,
                         child: GestureDetector(
                           onTap: () {
+                            _followBottom = true;
                             setState(() => _showJump = false);
                             _scroll.animateTo(0,
                                 duration: const Duration(milliseconds: 320),
