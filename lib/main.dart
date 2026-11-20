@@ -321,17 +321,33 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _input.addListener(() => setState(() {}));
+    // 输入框变化只影响发送键，不再重建整页（这是卡顿的主因）
     _boot();
     Timer(const Duration(seconds: 4), () {
       if (mounted && !_ready) setState(() => _ready = true);
     });
   }
 
+  bool _fullLoaded = false;
+
+  /// 全量历史（约 1.5MB）只在真要发请求时才读，开机不碰。
+  Future<void> _ensureFullHistory() async {
+    if (_fullLoaded) return;
+    _fullLoaded = true;
+    try {
+      final raw = await rootBundle.loadString('assets/history_full.json');
+      final list = jsonDecode(raw) as List;
+      _store.history.clear();
+      for (final e in list) {
+        _store.history.add(Msg.fromJson(Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {}
+  }
+
   Future<void> _boot() async {
     // 她的过去：真实原话，作为固定前缀（不动它，才能真正命中缓存）
     try {
-      final raw = await rootBundle.loadString('assets/history_full.json');
+      final raw = await rootBundle.loadString('assets/history_tail.json');
       final list = jsonDecode(raw) as List;
       _store.history = list
           .map((e) => Msg(e['r'] ?? 'user', e['t'] ?? ''))
@@ -800,6 +816,7 @@ class _ChatPageState extends State<ChatPage> {
 
   // ---- 发送 ----
   Future<void> _send([String? forced]) async {
+    await _ensureFullHistory();
     if (_busy) return;
     final text = (forced ?? _input.text).trim();
     if (text.isEmpty) return;
@@ -857,6 +874,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _regenerate() async {
+    await _ensureFullHistory();
     final s = _store.cur;
     if (s.msgs.length < 2 || _busy) return;
     if (s.msgs.last.role != 'assistant') return;
@@ -1516,10 +1534,7 @@ class _ChatPageState extends State<ChatPage> {
     final has = _input.text.trim().isNotEmpty;
     return SafeArea(
       top: false,
-      child: ClipRect(
-          child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
+      child: Container(
         margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
         padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
         decoration: BoxDecoration(
@@ -1548,24 +1563,32 @@ class _ChatPageState extends State<ChatPage> {
             _pill('回忆', null, false, _openRecall,
                 glyph: const _PetalGlyph(size: 15)),
             const Spacer(),
-            GestureDetector(
-              onTap: _busy ? null : () => _send(),
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: has ? C.accent : const Color(0xFF3A3A3D),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(_busy ? CupertinoIcons.square_fill : CupertinoIcons.arrow_up,
-                    size: 19, color: has ? Colors.white : const Color(0xFF8A8A8E)),
-              ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _input,
+              builder: (BuildContext c, TextEditingValue v, Widget? _) {
+                final on = v.text.trim().isNotEmpty;
+                return GestureDetector(
+                  onTap: _busy ? null : () => _send(),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: on ? C.accent : const Color(0xFF3A3A3D),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                        _busy
+                            ? CupertinoIcons.square_fill
+                            : CupertinoIcons.arrow_up,
+                        size: 19,
+                        color: on ? Colors.white : const Color(0xFF8A8A8E)),
+                  ),
+                );
+              },
             ),
             const SizedBox(width: 2),
           ]),
         ]),
-          ),
-        ),
       ),
     );
   }
