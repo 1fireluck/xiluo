@@ -529,6 +529,17 @@ class _ChatPageState extends State<ChatPage> {
   GlobalKey _keyFor(Msg m) => _msgKeys.putIfAbsent(m, () => GlobalKey());
 
   int _editIdx = -1;
+  final _editScroll = ScrollController();
+  bool _barOn = false;
+  Timer? _barTimer;
+
+  void _showBar() {
+    _barTimer?.cancel();
+    if (!_barOn && mounted) setState(() => _barOn = true);
+    _barTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted) setState(() => _barOn = false);
+    });
+  }
   double _savedOffset = 0;
 
   void _beginEdit(Msg m) {
@@ -611,22 +622,33 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
           ]),
-          TextField(
-            controller: _editC,
-            focusNode: _editFocus,
-            minLines: 1,
-            maxLines: 6,
-            cursorColor: C.accent,
-            style: const TextStyle(fontSize: 16, height: 1.5, color: C.text),
-            decoration: const InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.fromLTRB(0, 6, 0, 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 7 * 24.0),
+            child: Scrollbar(
+              controller: _editScroll,
+              thumbVisibility: _barOn,
+              radius: const Radius.circular(6),
+              thickness: 3,
+              child: TextField(
+                controller: _editC,
+                focusNode: _editFocus,
+                scrollController: _editScroll,
+                minLines: 1,
+                maxLines: 7,
+                cursorColor: C.accent,
+                style: const TextStyle(fontSize: 16, height: 1.5, color: C.text),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.fromLTRB(0, 6, 0, 6),
+                ),
+                onChanged: (v) {
+                  _editing?.draft = v.trim() == _editing?.text ? '' : v;
+                  _showBar();
+                  setState(() {});
+                },
+              ),
             ),
-            onChanged: (v) {
-              _editing?.draft = v.trim() == _editing?.text ? '' : v;
-              setState(() {});
-            },
           ),
           const SizedBox(height: 2),
           Row(children: [
@@ -1091,30 +1113,32 @@ class _ChatPageState extends State<ChatPage> {
 
     if (_editing != null) {
       final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
-      // 编辑中：整块对话变暗，被改的那条浮在正中间（不是贴底，也不是贴顶）
-      return Stack(
+      // 编辑中：上面是变暗的旧对话，下面是「被改的那条」，它紧压着修改框上沿；
+      // 修改框长高时，这条会一起被顶上去（和官方一致）
+      return Column(
         children: [
-          if (before.isNotEmpty)
-            Positioned.fill(
-              child: ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                itemCount: before.length,
-                itemBuilder: (ctx, i) => Opacity(
-                  opacity: 0.35,
-                  child: before[i].role == 'user'
-                      ? _mine(before[i], w)
-                      : _hers(before[i], i, before.length),
-                ),
-              ),
-            ),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0),
-              child: msgs.last.role == 'user'
-                  ? _mine(msgs.last, w)
-                  : _hers(msgs.last, msgs.length - 1, msgs.length),
-            ),
+          Expanded(
+            child: before.isEmpty
+                ? const SizedBox.shrink()
+                : ListView.builder(
+                    controller: _scroll,
+                    reverse: true,
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    itemCount: before.length,
+                    itemBuilder: (ctx, i) => Opacity(
+                      opacity: 0.35,
+                      child: before[before.length - 1 - i].role == 'user'
+                          ? _mine(before[before.length - 1 - i], w)
+                          : _hers(before[before.length - 1 - i], i,
+                              before.length),
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: msgs.last.role == 'user'
+                ? _mine(msgs.last, w)
+                : _hers(msgs.last, msgs.length - 1, msgs.length),
           ),
         ],
       );
