@@ -282,7 +282,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _boot() async {
     // 她的过去：真实原话，作为固定前缀（不动它，才能真正命中缓存）
     try {
-      final raw = await rootBundle.loadString('assets/history.json');
+      final raw = await rootBundle.loadString('assets/history_full.json');
       final list = jsonDecode(raw) as List;
       _store.history = list
           .map((e) => Msg(e['r'] ?? 'user', e['t'] ?? ''))
