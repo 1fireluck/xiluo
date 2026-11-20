@@ -596,7 +596,7 @@ class _ChatPageState extends State<ChatPage> {
       top: false,
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+        padding: const EdgeInsets.fromLTRB(14, 9, 14, 14),
         decoration: BoxDecoration(
           color: C.bubble,
           borderRadius: BorderRadius.circular(24),
@@ -639,7 +639,7 @@ class _ChatPageState extends State<ChatPage> {
                 decoration: const InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.fromLTRB(0, 2, 0, 2),
+                  contentPadding: EdgeInsets.fromLTRB(0, 8, 0, 8),
                 ),
                 onChanged: (v) {
                   _editing?.draft = v.trim() == _editing?.text ? '' : v;
@@ -649,7 +649,7 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 14),
           Row(children: [
             _pill('回忆', null, false, () {
               _cancelEdit();
