@@ -497,10 +497,9 @@ class _ChatPageState extends State<ChatPage> {
 
   // ---- 记忆 ----
   String _memoryBlock() {
-    // 只放她自己说过的话。我写的摘要一律不进去，
-    // 免得对话里混进别人的口气。
-    if (_store.voice.isEmpty) return '';
-    return _store.voice.take(12).join('\n\n---\n\n');
+    // 我一个字都不加。她是拿她自己说过的话续下去的，
+    // 不需要我再塞「记住你是希罗」这类东西。
+    return '';
   }
 
   Future<void> _extractMemory() async {
