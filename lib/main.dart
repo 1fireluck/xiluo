@@ -564,7 +564,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _cancelEdit() {
-    _editFocus.unfocus();
+    _closeKeyboard();
     _editIdx = -1;
     setState(() => _editing = null); // draft 留着，下次点进来还在
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -578,7 +578,7 @@ class _ChatPageState extends State<ChatPage> {
     final m = _editing;
     if (m == null) return;
     final t = _editC.text.trim();
-    _editFocus.unfocus();
+    _closeKeyboard();
     m.draft = '';
     setState(() => _editing = null);
     if (t.isEmpty) return;
@@ -843,6 +843,12 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ---- 发送 ----
+  void _closeKeyboard() {
+    _focus.unfocus();
+    _editFocus.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   Future<void> _send([String? forced]) async {
     if (_busy) return;
     final text = (forced ?? _input.text).trim();
@@ -862,6 +868,12 @@ class _ChatPageState extends State<ChatPage> {
       s.msgs.add(Msg('assistant', ''));
       _input.clear();
     });
+    // 发完就收起键盘、退出编辑态——否则会卡在输入框里出不来
+    _closeKeyboard();
+    if (_editing != null) {
+      _editIdx = -1;
+      setState(() => _editing = null);
+    }
     _toBottom(true);
     if (s.msgs.isEmpty) {
       setState(() => _busy = false);
