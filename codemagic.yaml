@@ -12,8 +12,8 @@ workflows:
           flutter pub get
       - name: set display name
         script: |
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 希罗" ios/Runner/Info.plist || \
-          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 希罗" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Hiro" ios/Runner/Info.plist || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Hiro" ios/Runner/Info.plist
       - name: build ios unsigned
         script: |
           flutter build ios --release --no-codesign
