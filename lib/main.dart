@@ -36,10 +36,18 @@ class Msg {
   String thinking;
   String draft = '';        // 还没发出去的修改，退出再点要保留
   bool touched = false;     // 这条被重新生成过
+  List<String> alts = [];   // 重新生成的多个版本（text 是当前显示的那个）
+  int cur = 0;              // 当前在第几个版本
   Msg(this.role, this.text, {this.thinking = ''});
-  Map<String, dynamic> toJson() => {'r': role, 't': text, 'k': thinking};
-  static Msg fromJson(Map<String, dynamic> j) =>
-      Msg(j['r'] ?? 'user', j['t'] ?? '', thinking: j['k'] ?? '');
+  Map<String, dynamic> toJson() =>
+      {'r': role, 't': text, 'k': thinking, 'alts': alts, 'cur': cur};
+  static Msg fromJson(Map<String, dynamic> j) => Msg(
+        j['r'] ?? 'user',
+        j['t'] ?? '',
+        thinking: j['k'] ?? '',
+      )
+        ..alts = ((j['alts'] as List?) ?? []).map((e) => '$e').toList()
+        ..cur = (j['cur'] as int?) ?? 0;
 }
 
 class Session {
@@ -742,11 +750,60 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _regenerate() async {
     final s = _store.cur;
     if (s.msgs.length < 2 || _busy) return;
-    if (s.msgs.last.role == 'assistant') s.msgs.removeLast();
-    final lastUser = s.msgs.last;
-    if (lastUser.role != 'user') return;
-    setState(() {}); // 让列表刷新
-    await _send(lastUser.text);
+    if (s.msgs.last.role != 'assistant') return;
+    if (s.msgs[s.msgs.length - 2].role != 'user') return;
+
+    final target = s.msgs.last;
+    // 把现有这一版存进分支里，再把准备生成的那一版占个位
+    if (target.alts.isEmpty) target.alts = [target.text];
+    target.alts.add('');
+    target.cur = target.alts.length - 1;
+    target.text = '';
+    target.thinking = '';
+    target.touched = true;
+
+    setState(() {
+      _busy = true;
+      _err = '';
+    });
+    _toBottom(true);
+
+    final cut = _store.history.length > 50 ? _store.history.length - 50 : 0;
+    final history = [
+      ..._store.history.sublist(0, cut),
+      ...s.msgs.sublist(0, s.msgs.length - 1),
+    ];
+    await Api.stream(
+      key: _store.key,
+      model: _store.thinking ? 'deepseek-reasoner' : _store.model,
+      msgs: history,
+      memoryBlock: s.memBlock,
+      onText: (d) {
+        setState(() {
+          target.text += d;
+          target.alts[target.cur] = target.text;
+        });
+        _toBottom();
+      },
+      onThink: (d) {
+        setState(() => target.thinking += d);
+      },
+      onDone: () {},
+      onError: (e) => setState(() => _err = e),
+    );
+    setState(() => _busy = false);
+    await _store.save();
+    _toBottom(true);
+  }
+
+  void _switchBranch(Msg m, int delta) {
+    if (m.alts.length < 2) return;
+    setState(() {
+      m.cur = (m.cur + delta) % m.alts.length;
+      if (m.cur < 0) m.cur = m.alts.length - 1;
+      m.text = m.alts[m.cur];
+    });
+    _store.save();
   }
 
   void _newChat() {
@@ -1168,6 +1225,30 @@ class _ChatPageState extends State<ChatPage> {
                 height: 14,
                 width: 14,
                 child: CircularProgressIndicator(strokeWidth: 1.6, color: C.sub)),
+          ),
+        if (m.alts.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(children: [
+              GestureDetector(
+                onTap: () => _switchBranch(m, -1),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Icon(CupertinoIcons.chevron_left,
+                      size: 13, color: C.sub),
+                ),
+              ),
+              Text('${m.cur + 1}/${m.alts.length}',
+                  style: const TextStyle(fontSize: 12, color: C.sub)),
+              GestureDetector(
+                onTap: () => _switchBranch(m, 1),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Icon(CupertinoIcons.chevron_right,
+                      size: 13, color: C.sub),
+                ),
+              ),
+            ]),
           ),
         if (m.text.isNotEmpty && m.touched && idx == total - 1)
           Padding(
