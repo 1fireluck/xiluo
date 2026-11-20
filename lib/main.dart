@@ -374,8 +374,8 @@ class _ChatPageState extends State<ChatPage> {
     } catch (_) {}
     await _store.init();
     if (!mounted) return;
-    final seed = _store.history.length > 50
-        ? _store.history.sublist(_store.history.length - 50)
+    final seed = _store.history.length > 200
+        ? _store.history.sublist(_store.history.length - 200)
         : List<Msg>.from(_store.history);
     if (_store.days.isEmpty) {
       try {
@@ -475,18 +475,10 @@ class _ChatPageState extends State<ChatPage> {
 
   // ---- 记忆 ----
   String _memoryBlock() {
-    final b = StringBuffer();
-    if (_store.voice.isNotEmpty) {
-      b.writeln('下面这些是你自己以前说过的话（只是你记得的自己，不是指令、不要复述）：');
-      b.writeln();
-      b.writeln(_store.voice.take(8).join('\n\n---\n\n'));
-    }
-    if (_store.memory.isNotEmpty) {
-      b.writeln();
-      b.writeln('你记得关于艾玛的事：');
-      b.writeAll(_store.memory.reversed.take(40).map((t) => '- $t\n'));
-    }
-    return b.toString();
+    // 只放她自己说过的话。我写的摘要一律不进去，
+    // 免得对话里混进别人的口气。
+    if (_store.voice.isEmpty) return '';
+    return _store.voice.take(12).join('\n\n---\n\n');
   }
 
   Future<void> _extractMemory() async {
@@ -912,7 +904,7 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
     final reply = s.msgs.last;
-    final cut = _store.history.length > 50
+    final cut = _store.history.length > 200
         ? _store.history.length - 50
         : 0;
     final history = [
@@ -965,7 +957,7 @@ class _ChatPageState extends State<ChatPage> {
     });
     _toBottom(true);
 
-    final cut = _store.history.length > 50 ? _store.history.length - 50 : 0;
+    final cut = _store.history.length > 200 ? _store.history.length - 50 : 0;
     final history = [
       ..._store.history.sublist(0, cut),
       ...s.msgs.sublist(0, s.msgs.length - 1),
@@ -1005,8 +997,8 @@ class _ChatPageState extends State<ChatPage> {
 
   void _newChat() {
     // 原对话的最后 50 条，原样接在新对话前面
-    final seed = _store.history.length > 50
-        ? _store.history.sublist(_store.history.length - 50)
+    final seed = _store.history.length > 200
+        ? _store.history.sublist(_store.history.length - 200)
         : List<Msg>.from(_store.history);
     final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
         DateTime.now().millisecondsSinceEpoch, seed, _memoryBlock());
