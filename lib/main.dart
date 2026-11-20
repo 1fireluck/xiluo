@@ -506,17 +506,24 @@ class _ChatPageState extends State<ChatPage> {
   GlobalKey _keyFor(Msg m) => _msgKeys.putIfAbsent(m, () => GlobalKey());
 
   int _editIdx = -1;
+  double _savedOffset = 0;
 
   void _beginEdit(Msg m) {
     if (_busy || m.role != 'user') return;
     _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
     setState(() {
+      if (_scroll.hasClients) _savedOffset = _scroll.offset;
       _editing = m;
       _editC.text = keep;
       _editC.selection = TextSelection.collapsed(offset: keep.length);
     });
-    _pinToBottom();
+    // 同一帧里直接跳到底：面板一升起来，那条消息就已经贴在输入栏上方，
+    // 不会出现「先出现文字、再滑上去」的两段动作。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _editFocus.requestFocus();
     });
@@ -526,7 +533,11 @@ class _ChatPageState extends State<ChatPage> {
     _editFocus.unfocus();
     _editIdx = -1;
     setState(() => _editing = null); // draft 留着，下次点进来还在
-    _pinToBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final max = _scroll.position.maxScrollExtent;
+      _scroll.jumpTo(_savedOffset > max ? max : _savedOffset);
+    });
   }
 
   void _submitEdit() {
@@ -1046,6 +1057,33 @@ class _ChatPageState extends State<ChatPage> {
         ]),
       );
     }
+    Widget rowAt(int i) {
+      final m = msgs[i];
+      final row = m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
+      if (_editing != null && i != _editIdx) {
+        return Opacity(opacity: 0.35, child: row);
+      }
+      return row;
+    }
+
+    if (_editing != null) {
+      // 编辑中：内容不满一屏也贴底，那条消息正好压在输入栏上方
+      return LayoutBuilder(
+        builder: (ctx, cons) => SingleChildScrollView(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: cons.maxHeight - 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [for (var i = 0; i < msgs.length; i++) rowAt(i)],
+            ),
+          ),
+        ),
+      );
+    }
+
     return ListView.builder(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
@@ -1058,12 +1096,7 @@ class _ChatPageState extends State<ChatPage> {
                 style: const TextStyle(fontSize: 13, color: Color(0xFFFF6B6B))),
           );
         }
-        final m = msgs[i];
-        final row = m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
-        if (_editing != null && i != _editIdx) {
-          return Opacity(opacity: 0.35, child: row);
-        }
-        return row;
+        return rowAt(i);
       },
     );
   }
