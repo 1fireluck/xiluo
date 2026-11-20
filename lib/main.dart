@@ -1087,8 +1087,9 @@ class _ChatPageState extends State<ChatPage> {
     var msgs = _store.cur.msgs;
     // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
     // 这样那条消息自然贴到输入栏正上方，位置固定。
-    if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
-      msgs = msgs.sublist(0, _editIdx + 1);
+    if (_editing != null) {
+      final cut = (_editIdx >= 0 && _editIdx < msgs.length) ? _editIdx : msgs.length - 1;
+      if (cut >= 0) msgs = msgs.sublist(0, cut + 1);
     }
     if (msgs.isEmpty) {
       return Center(
@@ -1111,6 +1112,7 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     if (_editing != null) {
+      final pinned = msgs.last;
       final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
       // 编辑中：上面是变暗的旧对话，下面是「被改的那条」，它紧压着修改框上沿；
       // 修改框长高时，这条会一起被顶上去（和官方一致）
@@ -1135,9 +1137,9 @@ class _ChatPageState extends State<ChatPage> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-            child: msgs.last.role == 'user'
-                ? _mine(msgs.last, w)
-                : _hers(msgs.last, msgs.length - 1, msgs.length),
+            child: pinned.role == 'user'
+                ? _mine(pinned, w)
+                : _hers(pinned, msgs.length - 1, msgs.length),
           ),
         ],
       );
