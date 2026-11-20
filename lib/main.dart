@@ -1649,9 +1649,23 @@ class _ChatPageState extends State<ChatPage> {
         Positioned(
           left: left,
           top: top,
-          child: Material(
-            color: C.side,
-            elevation: 8,
+          // 从手指的位置轻微长出来
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 130),
+            curve: Curves.easeOutCubic,
+            builder: (c, t, child) => Opacity(
+              opacity: t,
+              child: Transform.scale(
+                scale: 0.86 + 0.14 * t,
+                alignment: Alignment.bottomCenter,
+                child: child,
+              ),
+            ),
+            child: Material(
+            // 和发送栏一样：半透明，底下的字透一点上来
+            color: const Color(0xD92C2C2E),
+            elevation: 0,
             borderRadius: BorderRadius.circular(14),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
@@ -1673,6 +1687,7 @@ class _ChatPageState extends State<ChatPage> {
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ),
