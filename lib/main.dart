@@ -384,6 +384,12 @@ class _ChatPageState extends State<ChatPage> {
     }
     await _store.save();
     _settleBottom();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) _settleBottom();
+    });
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      _ensureFullHistory();
+    });
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
       await _openArchive();
     }
@@ -404,19 +410,20 @@ class _ChatPageState extends State<ChatPage> {
 
   void _jumpBottom() {
     if (!_scroll.hasClients) return;
-    _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    _scroll.jumpTo(0); // 列表已 reverse，0 就是最新那一头
   }
 
   // 首屏：等列表真的排完了再跳到底（否则会停在最上面、看起来一片空）
   void _settleBottom([int tries = 0]) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_scroll.hasClients && _scroll.position.maxScrollExtent > 0) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-        if (!_ready) setState(() => _ready = true);
-        return;
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+      if (!_ready) setState(() => _ready = true);
+      if (tries < 6) {
+        Future.delayed(const Duration(milliseconds: 60), () {
+          if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+        });
       }
-      if (tries < 40) _settleBottom(tries + 1);
     });
   }
 
@@ -816,7 +823,6 @@ class _ChatPageState extends State<ChatPage> {
 
   // ---- 发送 ----
   Future<void> _send([String? forced]) async {
-    await _ensureFullHistory();
     if (_busy) return;
     final text = (forced ?? _input.text).trim();
     if (text.isEmpty) return;
@@ -874,7 +880,6 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _regenerate() async {
-    await _ensureFullHistory();
     final s = _store.cur;
     if (s.msgs.length < 2 || _busy) return;
     if (s.msgs.last.role != 'assistant') return;
@@ -1085,36 +1090,49 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     if (_editing != null) {
-      // 编辑中：内容不满一屏也贴底，那条消息正好压在输入栏上方
-      return LayoutBuilder(
-        builder: (ctx, cons) => SingleChildScrollView(
-          controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: cons.maxHeight - 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [for (var i = 0; i < msgs.length; i++) rowAt(i)],
-            ),
+      final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
+      return Column(
+        children: [
+          Expanded(
+            child: before.isEmpty
+                ? const SizedBox.shrink()
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                    itemCount: before.length,
+                    itemBuilder: (ctx, i) => Opacity(
+                      opacity: 0.35,
+                      child: before[i].role == 'user'
+                          ? _mine(before[i], w)
+                          : _hers(before[i], i, before.length),
+                    ),
+                  ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: msgs.last.role == 'user'
+                ? _mine(msgs.last, w)
+                : _hers(msgs.last, msgs.length - 1, msgs.length),
+          ),
+        ],
       );
     }
 
     return ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+      reverse: true,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
       itemCount: msgs.length + (_err.isNotEmpty ? 1 : 0),
       itemBuilder: (ctx, i) {
-        if (_err.isNotEmpty && i == msgs.length) {
+        if (_err.isNotEmpty && i == 0) {
           return Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.only(bottom: 12),
             child: Text('出错了：$_err',
                 style: const TextStyle(fontSize: 13, color: Color(0xFFFF6B6B))),
           );
         }
-        return rowAt(i);
+        final idx = _err.isNotEmpty ? i - 1 : i;
+        return rowAt(msgs.length - 1 - idx);
       },
     );
   }
