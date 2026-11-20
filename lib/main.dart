@@ -101,6 +101,7 @@ class Store {
   String model = 'deepseek-chat';
   bool thinking = false;
   String curId = '';
+  int resetAt = 0;   // 重置到原对话结尾用的标记（一次生效）
 
   File? _file;
 
@@ -124,6 +125,7 @@ class Store {
         model = j['model'] ?? 'deepseek-chat';
         thinking = j['thinking'] ?? false;
         curId = j['cur'] ?? '';
+        resetAt = (j['reset'] as int?) ?? 0;
       } catch (_) {}
     }
     if (sessions.isEmpty) {
@@ -155,6 +157,7 @@ class Store {
       'model': model,
       'thinking': thinking,
       'cur': curId,
+        'reset': resetAt,
     }));
   }
 
@@ -374,6 +377,25 @@ class _ChatPageState extends State<ChatPage> {
     } catch (_) {}
     await _store.init();
     if (!mounted) return;
+    // 一次性的清理：把在这个 App 里产生的消息全部删掉，回到原对话的结尾
+    if (_store.resetAt < 1) {
+      final seed0 = _store.history.length > 200
+          ? _store.history.sublist(_store.history.length - 200)
+          : List<Msg>.from(_store.history);
+      _store.sessions
+        ..clear()
+        ..add(Session(
+            DateTime.now().millisecondsSinceEpoch.toString(),
+            '聊天......',
+            DateTime.now().millisecondsSinceEpoch,
+            List<Msg>.from(seed0),
+            ''));
+      _store.curId = _store.sessions.first.id;
+      _store.memory.clear();
+      _store.days.clear();
+      _store.resetAt = 1;
+      await _store.save();
+    }
     final seed = _store.history.length > 200
         ? _store.history.sublist(_store.history.length - 200)
         : List<Msg>.from(_store.history);
