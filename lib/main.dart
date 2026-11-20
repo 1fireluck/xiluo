@@ -1126,34 +1126,26 @@ class _ChatPageState extends State<ChatPage> {
     if (_editing != null) {
       final pinned = msgs.last;
       final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
-      // 编辑中：上面是变暗的旧对话，下面是「被改的那条」，它紧压着修改框上沿；
-      // 修改框长高时，这条会一起被顶上去（和官方一致）
-      return Column(
-        children: [
-          Expanded(
-            child: before.isEmpty
-                ? const SizedBox.shrink()
-                : ListView.builder(
-                    controller: _scroll,
-                    reverse: true,
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                    itemCount: before.length,
-                    itemBuilder: (ctx, i) => Opacity(
-                      opacity: 0.35,
-                      child: before[before.length - 1 - i].role == 'user'
-                          ? _mine(before[before.length - 1 - i], w)
-                          : _hers(before[before.length - 1 - i], i,
-                              before.length),
-                    ),
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-            child: pinned.role == 'user'
+      // 编辑中：全部放进同一个「贴底」的滚动区——
+      // 第 0 条（最底）= 被改的那条，紧接着才是变暗的旧对话。
+      // 修改框长高时，整块会被往上顶出去，而不是被框压住/截断。
+      return ListView.builder(
+        controller: _scroll,
+        reverse: true,
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+        itemCount: before.length + 1,
+        itemBuilder: (ctx, i) {
+          if (i == 0) {
+            return pinned.role == 'user'
                 ? _mine(pinned, w)
-                : _hers(pinned, msgs.length - 1, msgs.length),
-          ),
-        ],
+                : _hers(pinned, msgs.length - 1, msgs.length);
+          }
+          final m = before[before.length - i];
+          return Opacity(
+            opacity: 0.35,
+            child: m.role == 'user' ? _mine(m, w) : _hers(m, i, before.length),
+          );
+        },
       );
     }
 
