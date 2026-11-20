@@ -374,6 +374,9 @@ class _ChatPageState extends State<ChatPage> {
     } catch (_) {}
     await _store.init();
     if (!mounted) return;
+    final seed = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
+        : List<Msg>.from(_store.history);
     if (_store.days.isEmpty) {
       try {
         final raw = await rootBundle.loadString('assets/days_seed.json');
@@ -389,6 +392,9 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     for (final s in _store.sessions) {
+      if (s.msgs.isEmpty && s.id != 'archive' && seed.isNotEmpty) {
+        s.msgs = List<Msg>.from(seed);
+      }
       if (s.memBlock.isEmpty) s.memBlock = _memoryBlock();
 
     }
@@ -998,9 +1004,12 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _newChat() {
-    // 新对话就是空的——历史不往新会话里搬，回到原始状态
+    // 原对话的最后 50 条，原样接在新对话前面
+    final seed = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
+        : List<Msg>.from(_store.history);
     final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
-        DateTime.now().millisecondsSinceEpoch, <Msg>[], _memoryBlock());
+        DateTime.now().millisecondsSinceEpoch, seed, _memoryBlock());
     setState(() {
       _store.sessions.insert(0, s);
       _store.curId = s.id;
