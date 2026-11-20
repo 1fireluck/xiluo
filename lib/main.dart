@@ -318,8 +318,10 @@ class _ChatPageState extends State<ChatPage> {
       }
     }
     await _store.save();
-    setState(() => _ready = true);
-    _toBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _toBottom();
+      if (mounted) setState(() => _ready = true);
+    });
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
       await _openArchive();
     }
@@ -420,21 +422,39 @@ class _ChatPageState extends State<ChatPage> {
 
 
 
+  final Map<Msg, GlobalKey> _msgKeys = {};
+
+  GlobalKey _keyFor(Msg m) => _msgKeys.putIfAbsent(m, () => GlobalKey());
+
+  int _editIdx = -1;
+
   void _beginEdit(Msg m) {
     if (_busy || m.role != 'user') return;
+    _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
     setState(() {
       _editing = m;
       _editC.text = keep;
       _editC.selection = TextSelection.collapsed(offset: keep.length);
     });
-    Future.delayed(const Duration(milliseconds: 280), () {
-      if (mounted) _editFocus.requestFocus();
+    // 那条消息滑到输入栏正上方贴住（固定高度），像官方那样
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final ctx = _msgKeys[m]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx,
+            alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+            alignment: 1.0,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic);
+      }
+      _editFocus.requestFocus();
     });
   }
 
   void _cancelEdit() {
     _editFocus.unfocus();
+    _editIdx = -1;
     setState(() => _editing = null); // draft 留着，下次点进来还在
   }
 
@@ -539,6 +559,9 @@ class _ChatPageState extends State<ChatPage> {
       context: context,
       backgroundColor: C.side,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      barrierColor: Colors.black54,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (ctx) => SizedBox(
@@ -921,7 +944,19 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _list(double w) {
     if (_store.curId == 'archive') return _archiveList(w);
-    final msgs = _store.cur.msgs;
+    var msgs = _store.cur.msgs;
+    // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
+    // 这样那条消息自然贴到输入栏正上方，位置固定。
+    if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
+      msgs = msgs.sublist(0, _editIdx + 1);
+    }
+    if (!_ready && !_store.archiveLoaded) {
+      return const Center(
+          child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2, color: C.sub)));
+    }
     if (msgs.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1118,6 +1153,7 @@ class _ChatPageState extends State<ChatPage> {
         child: Align(
           alignment: Alignment.centerRight,
           child: GestureDetector(
+            key: _keyFor(m),
             onTap: () => _beginEdit(m),
             onLongPress: () => _mineMenu(m),
             child: Container(
