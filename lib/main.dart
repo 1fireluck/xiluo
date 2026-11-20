@@ -1622,36 +1622,73 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // 长按她的消息：在手指按的位置弹出，只有「重新生成」
+  OverlayEntry? _menuEntry;
+
+  void _closeHerMenu() {
+    _menuEntry?.remove();
+    _menuEntry = null;
+  }
+
   Future<void> _herMenu(Msg m, Offset p) async {
     if (_busy) return;
+    _closeHerMenu();
     final size = MediaQuery.of(context).size;
-    final v = await showMenu<String>(
-      context: context,
-      color: C.side,
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      position: RelativeRect.fromLTRB(
-          p.dx, p.dy, size.width - p.dx, size.height - p.dy),
-      items: [
-        PopupMenuItem<String>(
-          value: 'regen',
-          height: 42,
-          child: Row(children: const [
-            Icon(CupertinoIcons.arrow_clockwise, size: 17, color: C.text),
-            SizedBox(width: 10),
-            Text('重新生成', style: TextStyle(fontSize: 15, color: C.text)),
-          ]),
+    const mh = 42.0, mw = 150.0;
+    final left = (p.dx - mw / 2).clamp(8.0, size.width - mw - 8);
+    final top = (p.dy - mh - 12).clamp(60.0, size.height - 200.0);
+    final entry = OverlayEntry(
+      builder: (ctx) => Stack(children: [
+        // 点空白处：菜单消失
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _closeHerMenu,
+            child: Container(color: Colors.transparent),
+          ),
         ),
-      ],
+        Positioned(
+          left: left,
+          top: top,
+          child: Material(
+            color: C.side,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                _closeHerMenu();
+                _regenerateFromMenu(m);
+              },
+              child: SizedBox(
+                width: mw,
+                height: mh,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(CupertinoIcons.arrow_clockwise,
+                        size: 17, color: C.text),
+                    SizedBox(width: 8),
+                    Text('重新生成',
+                        style: TextStyle(fontSize: 15, color: C.text)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]),
     );
-    if (v == 'regen') {
-      final s = _store.cur;
-      if (s.msgs.isNotEmpty && s.msgs.last.role == 'assistant') {
-        s.msgs.last.touched = true;
-      }
-      await _regenerate();
-      await _store.save();
+    _menuEntry = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  Future<void> _regenerateFromMenu(Msg m) async {
+    final s = _store.cur;
+    if (s.msgs.isNotEmpty && s.msgs.last.role == 'assistant') {
+      s.msgs.last.touched = true;
     }
+    await _regenerate();
+    await _store.save();
   }
 
   Widget _act(IconData i, String tip, VoidCallback f) => InkWell(
