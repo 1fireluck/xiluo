@@ -544,6 +544,7 @@ class _ChatPageState extends State<ChatPage> {
   GlobalKey _keyFor(Msg m) => _msgKeys.putIfAbsent(m, () => GlobalKey());
 
   int _editIdx = -1;
+  bool _showJump = false;   // 离底部有点远了，右下角出现「回到底下」
   final _editScroll = ScrollController();
   bool _barOn = false;
   Timer? _barTimer;
@@ -1030,7 +1031,44 @@ class _ChatPageState extends State<ChatPage> {
                 _topBar(),
                 Expanded(
                   child: Stack(children: [
-                    Opacity(opacity: _ready ? 1 : 0, child: _list(w)),
+                    Opacity(
+                      opacity: _ready ? 1 : 0,
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (n) {
+                          // 列表是 reverse 的：0 就是最底
+                          final far = n.metrics.pixels > 240;
+                          if (far != _showJump && mounted) {
+                            setState(() => _showJump = far);
+                          }
+                          return false;
+                        },
+                        child: _list(w),
+                      ),
+                    ),
+                    if (_showJump && _ready)
+                      Positioned(
+                        right: 14,
+                        bottom: 12,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _showJump = false);
+                            _scroll.animateTo(0,
+                                duration: const Duration(milliseconds: 320),
+                                curve: Curves.easeOutCubic);
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: C.bubble,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: C.white12),
+                            ),
+                            child: const Icon(CupertinoIcons.chevron_down,
+                                size: 18, color: C.text),
+                          ),
+                        ),
+                      ),
                     if (_editing != null)
                       Positioned.fill(
                         child: GestureDetector(
