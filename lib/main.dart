@@ -613,6 +613,7 @@ class _ChatPageState extends State<ChatPage> {
     _closeKeyboard();
     _editIdx = -1;
     setState(() => _editing = null); // draft 留着，下次点进来还在
+    _store.save(); // 每条消息的草稿单独存盘，关掉软件也还在
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
       final max = _scroll.position.maxScrollExtent;
