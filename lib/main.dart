@@ -595,14 +595,13 @@ class _ChatPageState extends State<ChatPage> {
     });
     // 同一帧里直接跳到底：面板一升起来，那条消息就已经贴在输入栏上方，
     // 不会出现「先出现文字、再滑上去」的两段动作。
+    // 一步到位：同帧开始滑到最底，立刻要焦点（键盘和面板一起上来），
+    // 不再「先停 0.2 秒、再跳一下」。
+    _editFocus.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
-      _scroll.jumpTo(0);
-    });
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      _editFocus.requestFocus();
-      if (_scroll.hasClients) _scroll.jumpTo(0);
+      _scroll.animateTo(0,
+          duration: const Duration(milliseconds: 90), curve: Curves.easeOut);
     });
   }
 
