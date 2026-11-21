@@ -1109,25 +1109,6 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       ),
                     if (_editing != null)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: 1),
-                          duration: const Duration(milliseconds: 110),
-                          curve: Curves.easeOutCubic,
-                          builder: (ctx, t, child) => Opacity(
-                            opacity: t,
-                            child: FractionalTranslation(
-                              translation: Offset(0, (1 - t) * 0.25),
-                              child: child,
-                            ),
-                          ),
-                          child: _editPanel(),
-                        ),
-                      ),
-                    if (_editing != null)
                       Positioned.fill(
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
@@ -1155,7 +1136,21 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  _composer(),
+                  _editing == null
+                      ? _composer()
+                      : TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 120),
+                          curve: Curves.easeOutCubic,
+                          builder: (ctx, t, child) => ClipRect(
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              heightFactor: t,
+                              child: child,
+                            ),
+                          ),
+                          child: _editPanel(),
+                        ),
               ]),
               if (_drawer)
                 Positioned.fill(
@@ -1231,9 +1226,6 @@ class _ChatPageState extends State<ChatPage> {
     Widget rowAt(int i) {
       final m = msgs[i];
       final row = m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
-      if (_editing != null && i != _editIdx) {
-        return Opacity(opacity: 0.35, child: row);
-      }
       return row;
     }
 
