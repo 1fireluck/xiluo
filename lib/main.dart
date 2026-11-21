@@ -602,7 +602,7 @@ class _ChatPageState extends State<ChatPage> {
     if (_busy || m.role != 'user') return;
     _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
-    if (_scroll.hasClients) _savedOffset = _scroll.offset;
+    if (_scroll.hasClients) _savedOffset = _scroll.hasClients ? _scroll.offset : 0;
     final box = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
     _flyFrom = (box != null && box.hasSize)
         ? box.localToGlobal(Offset.zero) & box.size
@@ -616,52 +616,28 @@ class _ChatPageState extends State<ChatPage> {
     // 不会出现「先出现文字、再滑上去」的两段动作。
     // 立刻要焦点：键盘和面板一起上来，列表这一帧已经在位，不再有第二段滑动
     _editFocus.requestFocus();
-    // 让它停在发送栏正上方：等编辑框长出来以后再对齐一次
-    for (int i = 1; i <= 4; i++) {
-      Future.delayed(Duration(milliseconds: 30 * i), () {
-        if (!mounted || _editing != m) return;
-        final ctx = _msgKeys[m]?.currentContext;
-        if (ctx == null) return;
-        Scrollable.ensureVisible(
-          ctx,
-          alignment: 1.0,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-          duration: Duration(milliseconds: 60 * i),
-          curve: Curves.easeOut,
-        );
-      });
-    }
+    // 等框和键盘都到位后，一次性把那条的底边挪到框上沿（不再来回滑）
+    _alignEditedToPanel(m);
   }
 
   /// 整页滑动：把被修改的那条挪到修改框正上方（上面下面都还是原页面）
   Future<void> _alignEditedToPanel(Msg m) async {
-    // 整页滑动：一小步一小步挪，直到那条的底边正好落在修改框上沿
-    for (int step = 0; step < 120; step++) {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
-      if (!mounted || _editing != m) return;
-      final pb = _panelKey.currentContext?.findRenderObject() as RenderBox?;
-      if (pb == null) continue;
-      final pbTop = pb.localToGlobal(Offset.zero).dy;
-      final mb = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
-      if (mb == null) {
-        final next =
-            (_scroll.offset + 40).clamp(0.0, _scroll.position.maxScrollExtent);
-        if (next == _scroll.offset) return;
-        _scroll.jumpTo(next);
-        continue;
-      }
-      final mbBottom = mb.localToGlobal(Offset.zero).dy + mb.size.height;
-      var dy = mbBottom - pbTop + 8;
-      if (dy.abs() <= 1.5) return;
-      // 每帧最多挪 100 像素，避免一步冲过头
-      if (dy > 100) dy = 100;
-      if (dy < -100) dy = -100;
-      final next = (_scroll.offset - dy)
-          .clamp(0.0, _scroll.position.maxScrollExtent);
-      if ((next - _scroll.offset).abs() < 0.5) return;
-      _scroll.jumpTo(next);
-    }
+    // 框刚出现时先等它上到位（键盘约 250ms），再一次性把那条的底边挪到框上沿
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+    if (!mounted || _editing != m) return;
+    final pb = _panelKey.currentContext?.findRenderObject() as RenderBox?;
+    if (pb == null) return;
+    final pbTop = pb.localToGlobal(Offset.zero).dy;
+    final mb = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
+    if (mb == null) return;
+    final mbBottom = mb.localToGlobal(Offset.zero).dy + mb.size.height;
+    final dy = mbBottom - pbTop + 10;
+    if (dy.abs() <= 1.0) return;
+    final next =
+        (_scroll.offset - dy).clamp(0.0, _scroll.position.maxScrollExtent);
+    _scroll.jumpTo(next);
   }
+
 
 
 
@@ -1274,9 +1250,7 @@ class _ChatPageState extends State<ChatPage> {
                   )
                 else
                   SizedBox(
-                      height: (_editing == null
-                              ? _composerH
-                              : (_panelH <= 0 ? 190 : _panelH)) +
+                      height: (_editing == null ? 96.0 : 300.0) +
                           MediaQuery.of(context).viewInsets.bottom),
               ]),
               if (_store.curId != 'archive' && _editing == null)
@@ -1284,33 +1258,16 @@ class _ChatPageState extends State<ChatPage> {
                   left: 0,
                   right: 0,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: _Measure(
-                    onSize: (h) {
-                      if ((_composerH - h).abs() > 0.5) {
-                        _composerH = h;
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) setState(() {});
-                        });
-                      }
-                    },
-                    child: _composer(),
-                  ),
+                  child: _composer(),
                 ),
               if (_editing != null)
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: _Measure(
+                  child: Container(
                     key: _panelKey,
-                    onSize: (h) {
-                      if ((_panelH - h).abs() > 0.5) {
-                        _panelH = h;
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) setState(() {});
-                        });
-                      }
-                    },
+                    color: Colors.transparent,
                     child: _editPanel(),
                   ),
                 ),
@@ -1372,6 +1329,10 @@ class _ChatPageState extends State<ChatPage> {
   Widget _list(double w) {
     if (_store.curId == 'archive') return _archiveList(w);
     var msgs = _store.cur.msgs;
+    // 编辑中：把她之后的话暂时收起（提交后会被替换掉），这样那条正好停在框上面
+    if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
+      msgs = msgs.sublist(0, _editIdx + 1);
+    }
     if (msgs.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
