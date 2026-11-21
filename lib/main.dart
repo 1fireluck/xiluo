@@ -1161,43 +1161,29 @@ class _ChatPageState extends State<ChatPage> {
                     child: Container(color: const Color(0xB8000000)),
                   ),
                 ),
-                if (_flyFrom != null)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 120),
-                        curve: Curves.easeOutCubic,
-                        builder: (ctx, t, child) {
-                          final from = _flyFrom!.top;
-                          final to = MediaQuery.of(context).size.height -
-                              MediaQuery.of(context).viewInsets.bottom -
-                              _panelH -
-                              _flyFrom!.height -
-                              6;
-                          final y = from + (to - from) * t;
-                          return Stack(
-                            children: [
-                              Positioned(
-                                left: 16,
-                                right: 16,
-                                top: y,
-                                child: _mine(_editing!, w),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: Container(
-                    key: _panelKey,
-                    color: const Color(0xFF151517),
-                    child: SafeArea(top: false, child: _editPanel()),
+                  child: IgnorePointer(
+                    ignoring: false,
+                    child: Container(
+                      key: _panelKey,
+                      color: Colors.transparent,
+                      child: SafeArea(
+                        top: false,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: _mine(_editing!, w),
+                            ),
+                            _editPanel(),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
