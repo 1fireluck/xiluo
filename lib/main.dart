@@ -614,7 +614,21 @@ class _ChatPageState extends State<ChatPage> {
     // 不会出现「先出现文字、再滑上去」的两段动作。
     // 立刻要焦点：键盘和面板一起上来，列表这一帧已经在位，不再有第二段滑动
     _editFocus.requestFocus();
-    // 位置交给用户自己看：不再自动滚动（他要求先别再动）
+    // 让它停在发送栏正上方：等编辑框长出来以后再对齐一次
+    for (int i = 1; i <= 4; i++) {
+      Future.delayed(Duration(milliseconds: 30 * i), () {
+        if (!mounted || _editing != m) return;
+        final ctx = _msgKeys[m]?.currentContext;
+        if (ctx == null) return;
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 1.0,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+          duration: Duration(milliseconds: 60 * i),
+          curve: Curves.easeOut,
+        );
+      });
+    }
   }
 
   /// 整页滑动：把被修改的那条挪到修改框正上方（上面下面都还是原页面）
