@@ -1144,21 +1144,7 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  _editing == null
-                      ? _composer()
-                      : TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 130),
-                          curve: Curves.easeOutCubic,
-                          builder: (ctx, t, child) => ClipRect(
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              heightFactor: t,
-                              child: child,
-                            ),
-                          ),
-                          child: _editPanel(),
-                        ),
+                  _editing == null ? _composer() : _editPanel(),
               ]),
               if (_drawer)
                 Positioned.fill(
@@ -1218,6 +1204,10 @@ class _ChatPageState extends State<ChatPage> {
   Widget _list(double w) {
     if (_store.curId == 'archive') return _archiveList(w);
     var msgs = _store.cur.msgs;
+    // EDIT-CUT：编辑时截到被改那条为止，它就贴在修改栏正上方
+    if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
+      msgs = msgs.sublist(0, _editIdx + 1);
+    }
     // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
     // 这样那条消息自然贴到输入栏正上方，位置固定。
     if (msgs.isEmpty) {
