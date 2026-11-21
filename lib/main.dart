@@ -549,8 +549,8 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       if (_scroll.hasClients) _savedOffset = _scroll.offset;
       _editing = m;
-      _editC.text = keep;
-      _editC.selection = TextSelection.collapsed(offset: keep.length);
+      _input.text = keep;
+      _input.selection = TextSelection.collapsed(offset: keep.length);
     });
     // 同一帧里直接跳到底：面板一升起来，那条消息就已经贴在输入栏上方，
     // 不会出现「先出现文字、再滑上去」的两段动作。
@@ -861,10 +861,20 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
     final s = _store.cur;
+    final editing = _editing;
     setState(() {
       _busy = true;
       _err = '';
-      s.msgs.add(Msg('user', text));
+      if (editing != null) {
+        // 改的是某一条：删掉它之后的话，用它自己承载新内容
+        final idx = s.msgs.indexOf(editing);
+        if (idx >= 0) s.msgs.removeRange(idx, s.msgs.length);
+        editing.text = text;
+        editing.draft = '';
+        s.msgs.add(editing);
+      } else {
+        s.msgs.add(Msg('user', text));
+      }
       s.msgs.add(Msg('assistant', ''));
       _input.clear();
     });
