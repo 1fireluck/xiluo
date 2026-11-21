@@ -587,34 +587,27 @@ class _ChatPageState extends State<ChatPage> {
     if (_busy || m.role != 'user') return;
     _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
+    if (_scroll.hasClients) {
+      _savedOffset = _scroll.offset;
+      _scroll.jumpTo(0); // 先归零，再重建：新的一帧就已经在位置上
+    }
     setState(() {
-      if (_scroll.hasClients) _savedOffset = _scroll.offset;
       _editing = m;
       _editC.text = keep;
       _editC.selection = TextSelection.collapsed(offset: keep.length);
     });
     // 同一帧里直接跳到底：面板一升起来，那条消息就已经贴在输入栏上方，
     // 不会出现「先出现文字、再滑上去」的两段动作。
-    // 一步到位：同帧开始滑到最底，立刻要焦点（键盘和面板一起上来），
-    // 不再「先停 0.2 秒、再跳一下」。
+    // 立刻要焦点：键盘和面板一起上来，列表这一帧已经在位，不再有第二段滑动
     _editFocus.requestFocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      _scroll.animateTo(0,
-          duration: const Duration(milliseconds: 90), curve: Curves.easeOut);
-    });
   }
 
   void _cancelEdit() {
     _closeKeyboard();
     _editIdx = -1;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() => _editing = null); // draft 留着，下次点进来还在
     _store.save(); // 每条消息的草稿单独存盘，关掉软件也还在
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      final max = _scroll.position.maxScrollExtent;
-      _scroll.jumpTo(_savedOffset > max ? max : _savedOffset);
-    });
   }
 
   void _submitEdit() {
