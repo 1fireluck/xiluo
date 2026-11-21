@@ -634,8 +634,8 @@ class _ChatPageState extends State<ChatPage> {
     final dy = mbBottom - pbTop + 10;
     if (dy.abs() <= 1.0) return;
     final next =
-        (_scroll.offset - dy).clamp(0.0, _scroll.position.maxScrollExtent);
-    _scroll.jumpTo(next);
+        (_scroll.offset + dy).clamp(0.0, _scroll.position.maxScrollExtent);
+    if ((next - _scroll.offset).abs() > 0.5) _scroll.jumpTo(next);
   }
 
 
@@ -1329,10 +1329,7 @@ class _ChatPageState extends State<ChatPage> {
   Widget _list(double w) {
     if (_store.curId == 'archive') return _archiveList(w);
     var msgs = _store.cur.msgs;
-    // 编辑中：把她之后的话暂时收起（提交后会被替换掉），这样那条正好停在框上面
-    if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
-      msgs = msgs.sublist(0, _editIdx + 1);
-    }
+    // 不裁剪：靠滚动把那条推到框上面（她后面的话会滑到框底下，和官方一样）
     if (msgs.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
