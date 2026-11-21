@@ -1144,7 +1144,24 @@ class _ChatPageState extends State<ChatPage> {
                     duration: const Duration(milliseconds: 100),
                     curve: Curves.easeOut,
                     alignment: Alignment.topCenter,
-                    child: _editing == null ? _composer() : _editPanel(),
+                    // 面板从下往上「长」出来（110ms）：
+                    // 它长高的同时把上面的消息一起顶上去，
+                    // 看起来就是「一边上滑一边把话放进框里」，不是两步。
+                    child: _editing == null
+                        ? _composer()
+                        : TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: 1),
+                            duration: const Duration(milliseconds: 110),
+                            curve: Curves.easeOutCubic,
+                            builder: (ctx, t, child) => ClipRect(
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                heightFactor: t,
+                                child: child,
+                              ),
+                            ),
+                            child: _editPanel(),
+                          ),
                   ),
               ]),
               if (_drawer)
