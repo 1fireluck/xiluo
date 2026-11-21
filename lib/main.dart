@@ -582,12 +582,19 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
   double _savedOffset = 0;
+  Rect? _flyFrom; // 被改那条在原背景里的位置
+  double _panelH = 0; // 修改面板高度（用于算落点）
+  final GlobalKey _panelKey = GlobalKey();
 
   void _beginEdit(Msg m) {
     if (_busy || m.role != 'user') return;
     _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
     if (_scroll.hasClients) _savedOffset = _scroll.offset;
+    final box = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
+    _flyFrom = (box != null && box.hasSize)
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
     setState(() {
       _editing = m;
       _editC.text = keep;
@@ -602,6 +609,7 @@ class _ChatPageState extends State<ChatPage> {
   void _cancelEdit() {
     _closeKeyboard();
     _editIdx = -1;
+    _flyFrom = null;
     setState(() => _editing = null); // draft 留着，下次点进来还在
     _store.save(); // 每条消息的草稿单独存盘，关掉软件也还在
   }
@@ -665,8 +673,8 @@ class _ChatPageState extends State<ChatPage> {
               onTap: _cancelEdit,
               behavior: HitTestBehavior.opaque,
               child: Container(
-                width: 26,
-                height: 26,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: C.white12,
                   shape: BoxShape.circle,
@@ -1143,33 +1151,45 @@ class _ChatPageState extends State<ChatPage> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _cancelEdit,
-                    onVerticalDragEnd: (_) => _cancelEdit(),
-                    onHorizontalDragEnd: (_) => _cancelEdit(),
                     child: Container(color: const Color(0xB8000000)),
                   ),
                 ),
+                if (_flyFrom != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 120),
+                        curve: Curves.easeOutCubic,
+                        builder: (ctx, t, child) {
+                          final from = _flyFrom!.top;
+                          final to = MediaQuery.of(context).size.height -
+                              _panelH -
+                              _flyFrom!.height -
+                              6;
+                          final y = from + (to - from) * t;
+                          return Stack(
+                            children: [
+                              Positioned(
+                                left: 16,
+                                right: 16,
+                                top: y,
+                                child: _mine(_editing!, w),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
                   child: Container(
+                    key: _panelKey,
                     color: const Color(0xFF151517),
-                    child: SafeArea(
-                      top: false,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_editing != null)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                              child: _editing!.role == 'user'
-                                  ? _mine(_editing!, w)
-                                  : _hers(_editing!, 0, 1),
-                            ),
-                          _editPanel(),
-                        ],
-                      ),
-                    ),
+                    child: SafeArea(top: false, child: _editPanel()),
                   ),
                 ),
               ],
@@ -1275,7 +1295,9 @@ class _ChatPageState extends State<ChatPage> {
                 : _hers(pinned, msgs.length - 1, msgs.length);
           }
           final m = shown[shown.length - i];
-          return m.role == 'user' ? _mine(m, w) : _hers(m, i, shown.length);
+          final wdg = m.role == 'user' ? _mine(m, w) : _hers(m, i, shown.length);
+          // 正在改的那条：原地留出高度（背景一点不动），本体由浮层画
+          return m == _editing ? Opacity(opacity: 0, child: wdg) : wdg;
         },
       );
     }
