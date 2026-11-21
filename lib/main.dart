@@ -439,6 +439,16 @@ class _ChatPageState extends State<ChatPage> {
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
       await _openArchive();
     }
+    if (kIsWeb && Uri.base.queryParameters.containsKey('edit')) {
+      // #EDITDEBUG 自动进入编辑，便于截图核对
+      final ms = _store.cur.msgs;
+      final i = ms.lastIndexWhere((e) => e.role == 'user');
+      if (i >= 0) {
+        Future.delayed(const Duration(milliseconds: 700), () {
+          if (mounted) _beginEdit(ms[i]);
+        });
+      }
+    }
     if (kIsWeb && Uri.base.queryParameters.containsKey('demo')) {
       Future.delayed(const Duration(milliseconds: 600), () => _send('希罗……你在吗……'));
     }
@@ -604,7 +614,41 @@ class _ChatPageState extends State<ChatPage> {
     // 不会出现「先出现文字、再滑上去」的两段动作。
     // 立刻要焦点：键盘和面板一起上来，列表这一帧已经在位，不再有第二段滑动
     _editFocus.requestFocus();
+    // 位置交给用户自己看：不再自动滚动（他要求先别再动）
   }
+
+  /// 整页滑动：把被修改的那条挪到修改框正上方（上面下面都还是原页面）
+  Future<void> _alignEditedToPanel(Msg m) async {
+    // 整页滑动：一小步一小步挪，直到那条的底边正好落在修改框上沿
+    for (int step = 0; step < 120; step++) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!mounted || _editing != m) return;
+      final pb = _panelKey.currentContext?.findRenderObject() as RenderBox?;
+      if (pb == null) continue;
+      final pbTop = pb.localToGlobal(Offset.zero).dy;
+      final mb = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
+      if (mb == null) {
+        final next =
+            (_scroll.offset + 40).clamp(0.0, _scroll.position.maxScrollExtent);
+        if (next == _scroll.offset) return;
+        _scroll.jumpTo(next);
+        continue;
+      }
+      final mbBottom = mb.localToGlobal(Offset.zero).dy + mb.size.height;
+      var dy = mbBottom - pbTop + 8;
+      if (dy.abs() <= 1.5) return;
+      // 每帧最多挪 100 像素，避免一步冲过头
+      if (dy > 100) dy = 100;
+      if (dy < -100) dy = -100;
+      final next = (_scroll.offset - dy)
+          .clamp(0.0, _scroll.position.maxScrollExtent);
+      if ((next - _scroll.offset).abs() < 0.5) return;
+      _scroll.jumpTo(next);
+    }
+  }
+
+
+
 
   void _cancelEdit() {
     _closeKeyboard();
@@ -1144,7 +1188,15 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  SizedBox(height: 78 + MediaQuery.of(context).viewInsets.bottom),
+                  (_editing == null
+                      ? SizedBox(
+                          height: 78 + MediaQuery.of(context).viewInsets.bottom)
+                      : Padding(
+                          key: _panelKey,
+                          padding: EdgeInsets.only(
+                              bottom: MediaQuery.of(context).viewInsets.bottom),
+                          child: _editPanel(),
+                        )),
               ]),
               if (_store.curId != 'archive' && _editing == null)
                 Positioned(
@@ -1153,40 +1205,6 @@ class _ChatPageState extends State<ChatPage> {
                   bottom: MediaQuery.of(context).viewInsets.bottom,
                   child: _composer(),
                 ),
-              if (_editing != null) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _cancelEdit,
-                    child: Container(color: const Color(0xB8000000)),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: IgnorePointer(
-                    ignoring: false,
-                    child: Container(
-                      key: _panelKey,
-                      color: Colors.transparent,
-                      child: SafeArea(
-                        top: false,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                              child: _mine(_editing!, w),
-                            ),
-                            _editPanel(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
