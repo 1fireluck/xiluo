@@ -1083,6 +1083,14 @@ class _ChatPageState extends State<ChatPage> {
                         child: _list(w),
                       ),
                     ),
+                    if (_editing != null)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _cancelEdit,
+                          child: Container(color: const Color(0xB8000000)),
+                        ),
+                      ),
                     if (_showJump && _ready)
                       Positioned(
                         right: 14,
