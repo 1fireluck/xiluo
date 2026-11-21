@@ -696,6 +696,75 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  /// 官方做法：被修改的消息【原地】变成编辑框
+  Widget _inlineEditor(double w) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF2C2C2E),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF4D6BFE), width: 1.5),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 10, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _editC,
+              focusNode: _editFocus,
+              maxLines: 7,
+              minLines: 1,
+              cursorColor: const Color(0xFF4D6BFE),
+              style: TextStyle(
+                  fontSize: 16, height: 1.5, color: C.text, decoration: TextDecoration.none),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintText: '修改这条',
+                hintStyle: TextStyle(color: Color(0xFF8A8F98), fontSize: 16),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _cancelEdit,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text('取消',
+                        style: TextStyle(fontSize: 15, color: C.sub)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _submitEdit,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4D6BFE),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Text('发送',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _editPanel() {
     final has = _editC.text.trim().isNotEmpty;
     return SafeArea(
