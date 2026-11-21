@@ -329,7 +329,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _store = Store();
   final _input = TextEditingController();
   final _scroll = ScrollController();
@@ -346,8 +346,37 @@ class _ChatPageState extends State<ChatPage> {
   int _turn = 0;
 
   @override
+  late final AnimationController _kb;
+  double _kbOpen = 0; // 键盘最终高度
+  bool _kbWasOpen = false;
+  double get _dockH => _editing == null ? 96.0 : 300.0;
+
+  @override
+  void didChangeMetrics() {
+    final insets = WidgetsBinding.instance.platformDispatcher.views.first.viewInsets.bottom;
+    final open = insets > 0;
+    if (open != _kbWasOpen) {
+      _kbWasOpen = open;
+      if (open) {
+        _kbOpen = insets;
+        _kb.value = 0;
+        _kb.forward();
+      } else {
+        _kb.reverse();
+      }
+    } else if (open && (insets - _kbOpen).abs() > 1) {
+      _kbOpen = insets;
+      if (mounted) setState(() {});
+    }
+  }
+
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _kb = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 250),
+        value: 0);
     // 输入框变化只影响发送键，不再重建整页（这是卡顿的主因）
     _boot();
     Timer(const Duration(seconds: 4), () {
@@ -457,6 +486,8 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _kb.dispose();
     _editC.dispose();
     _editFocus.dispose();
     _input.dispose();
@@ -1169,9 +1200,12 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
-    return Scaffold(
+    return MediaQuery.removeViewInsets(
+        context: context,
+        removeBottom: true,
+        child: Scaffold(
       backgroundColor: C.bg,
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: false,
       body: Stack(children: [
               Column(children: [
                 _topBar(),
@@ -1249,13 +1283,29 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  _editing == null
-                      ? _composer()
-                      : Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Container(key: _panelKey, child: _editPanel()),
-                        ),
+                  SizedBox(
+                      height: _dockH + MediaQuery.paddingOf(context).bottom),
               ]),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AnimatedBuilder(
+                  animation: _kb,
+                  builder: (_, child) => Transform.translate(
+                    offset: Offset(0, -_kbOpen * _kb.value),
+                    child: child,
+                  ),
+                  child: RepaintBoundary(
+                    child: _editing == null
+                        ? _composer()
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Container(key: _panelKey, child: _editPanel()),
+                          ),
+                  ),
+                ),
+              ),
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
@@ -1274,6 +1324,7 @@ class _ChatPageState extends State<ChatPage> {
                 child: _sidePanel(),
               ),
             ]),
+        ),
     );
   }
 
