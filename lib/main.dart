@@ -604,9 +604,6 @@ class _ChatPageState extends State<ChatPage> {
       _editFocus.requestFocus();
       if (_scroll.hasClients) _scroll.jumpTo(0);
     });
-    Future.delayed(const Duration(milliseconds: 620), () {
-      if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
-    });
   }
 
   void _cancelEdit() {
@@ -711,7 +708,7 @@ class _ChatPageState extends State<ChatPage> {
                   contentPadding: EdgeInsets.fromLTRB(0, 8, 0, 8),
                 ),
                 onChanged: (v) {
-                  if (_scroll.hasClients) _scroll.jumpTo(0);
+                  if (_scroll.hasClients && _scroll.offset != 0) _scroll.jumpTo(0);
                   _editing?.draft = v.trim() == _editing?.text ? '' : v;
                   _showBar();
                   setState(() {});
