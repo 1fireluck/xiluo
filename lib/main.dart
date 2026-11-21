@@ -1088,6 +1088,8 @@ class _ChatPageState extends State<ChatPage> {
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: _cancelEdit,
+                          onVerticalDragEnd: (_) => _cancelEdit(),
+                          onHorizontalDragEnd: (_) => _cancelEdit(),
                           child: Container(color: const Color(0xB8000000)),
                         ),
                       ),
