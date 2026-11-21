@@ -653,21 +653,33 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
   /// 整页滑动：把被修改的那条挪到修改框正上方（上面下面都还是原页面）
   Future<void> _alignEditedToPanel(Msg m) async {
-    // 框刚出现时先等它上到位（键盘约 250ms），再一次性把那条的底边挪到框上沿
-    await Future<void>.delayed(const Duration(milliseconds: 260));
+    // 不看方向：一小步一小步挪，直到那条的底边正好落在修改框上沿
+    await Future<void>.delayed(const Duration(milliseconds: 240));
     if (!mounted || _editing != m) return;
-    final pb = _panelKey.currentContext?.findRenderObject() as RenderBox?;
-    if (pb == null) return;
-    final pbTop = pb.localToGlobal(Offset.zero).dy;
-    final mb = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
-    if (mb == null) return;
-    final mbBottom = mb.localToGlobal(Offset.zero).dy + mb.size.height;
-    final dy = mbBottom - pbTop + 10;
-    if (dy.abs() <= 1.0) return;
-    final next =
-        (_scroll.offset + dy).clamp(0.0, _scroll.position.maxScrollExtent);
-    if ((next - _scroll.offset).abs() > 0.5) _scroll.jumpTo(next);
+    for (int step = 0; step < 80; step++) {
+      final pb = _panelKey.currentContext?.findRenderObject() as RenderBox?;
+      final mb = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
+      if (pb == null || mb == null) return;
+      final pbTop = pb.localToGlobal(Offset.zero).dy;
+      final mbBottom = mb.localToGlobal(Offset.zero).dy + mb.size.height;
+      final dy = mbBottom - pbTop + 10; // >0 表示还要往下挪
+      if (dy.abs() <= 2) return;
+      final pos = _scroll.position;
+      final move = dy > 0 ? -12.0 : 12.0; // 先试一个方向，方向不对下一轮会回来
+      final cur = _scroll.offset;
+      final next = (cur + move).clamp(0.0, pos.maxScrollExtent);
+      if ((next - cur).abs() < 0.5) {
+        // 到头了还不对：反向试一次
+        final back = (cur - move).clamp(0.0, pos.maxScrollExtent);
+        if ((back - cur).abs() < 0.5) return;
+        _scroll.jumpTo(back);
+      } else {
+        _scroll.jumpTo(next);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 12));
+    }
   }
+
 
 
 
@@ -1200,12 +1212,9 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
-    return MediaQuery.removeViewInsets(
-        context: context,
-        removeBottom: true,
-        child: Scaffold(
+    return Scaffold(
       backgroundColor: C.bg,
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: Stack(children: [
               Column(children: [
                 _topBar(),
@@ -1283,29 +1292,13 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                     ),
                   )
                 else
-                  SizedBox(
-                      height: _dockH + MediaQuery.paddingOf(context).bottom),
+                  _editing == null
+                      ? _composer()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Container(key: _panelKey, child: _editPanel()),
+                        ),
               ]),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AnimatedBuilder(
-                  animation: _kb,
-                  builder: (_, child) => Transform.translate(
-                    offset: Offset(0, -_kbOpen * _kb.value),
-                    child: child,
-                  ),
-                  child: RepaintBoundary(
-                    child: _editing == null
-                        ? _composer()
-                        : Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Container(key: _panelKey, child: _editPanel()),
-                          ),
-                  ),
-                ),
-              ),
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
@@ -1324,7 +1317,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                 child: _sidePanel(),
               ),
             ]),
-        ),
     );
   }
 
