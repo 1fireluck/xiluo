@@ -587,10 +587,7 @@ class _ChatPageState extends State<ChatPage> {
     if (_busy || m.role != 'user') return;
     _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
-    if (_scroll.hasClients) {
-      _savedOffset = _scroll.offset;
-      _scroll.jumpTo(0); // 先归零，再重建：新的一帧就已经在位置上
-    }
+    if (_scroll.hasClients) _savedOffset = _scroll.offset;
     setState(() {
       _editing = m;
       _editC.text = keep;
@@ -605,7 +602,6 @@ class _ChatPageState extends State<ChatPage> {
   void _cancelEdit() {
     _closeKeyboard();
     _editIdx = -1;
-    if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() => _editing = null); // draft 留着，下次点进来还在
     _store.save(); // 每条消息的草稿单独存盘，关掉软件也还在
   }
@@ -1113,6 +1109,25 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                       ),
                     if (_editing != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 110),
+                          curve: Curves.easeOutCubic,
+                          builder: (ctx, t, child) => Opacity(
+                            opacity: t,
+                            child: FractionalTranslation(
+                              translation: Offset(0, (1 - t) * 0.25),
+                              child: child,
+                            ),
+                          ),
+                          child: _editPanel(),
+                        ),
+                      ),
+                    if (_editing != null)
                       Positioned.fill(
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
@@ -1140,29 +1155,7 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 100),
-                    curve: Curves.easeOut,
-                    alignment: Alignment.topCenter,
-                    // 面板从下往上「长」出来（110ms）：
-                    // 它长高的同时把上面的消息一起顶上去，
-                    // 看起来就是「一边上滑一边把话放进框里」，不是两步。
-                    child: _editing == null
-                        ? _composer()
-                        : TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0, end: 1),
-                            duration: const Duration(milliseconds: 110),
-                            curve: Curves.easeOutCubic,
-                            builder: (ctx, t, child) => ClipRect(
-                              child: Align(
-                                alignment: Alignment.bottomCenter,
-                                heightFactor: t,
-                                child: child,
-                              ),
-                            ),
-                            child: _editPanel(),
-                          ),
-                  ),
+                  _composer(),
               ]),
               if (_drawer)
                 Positioned.fill(
@@ -1224,10 +1217,6 @@ class _ChatPageState extends State<ChatPage> {
     var msgs = _store.cur.msgs;
     // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
     // 这样那条消息自然贴到输入栏正上方，位置固定。
-    if (_editing != null) {
-      final cut = (_editIdx >= 0 && _editIdx < msgs.length) ? _editIdx : msgs.length - 1;
-      if (cut >= 0) msgs = msgs.sublist(0, cut + 1);
-    }
     if (msgs.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
