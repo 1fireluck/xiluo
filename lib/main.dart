@@ -1231,26 +1231,26 @@ class _ChatPageState extends State<ChatPage> {
 
     if (_editing != null) {
       final pinned = msgs.last;
-      final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
-      // 编辑中：全部放进同一个「贴底」的滚动区——
-      // 第 0 条（最底）= 被改的那条，紧接着才是变暗的旧对话。
-      // 修改框长高时，整块会被往上顶出去，而不是被框压住/截断。
+      final tail = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
+      // 编辑时不能滚动：只画屏幕里看得见的这几条（外加被改的那条），
+      // 几百条不用排，这一帧就轻了。
+      const keep = 12;
+      final from = tail.length > keep ? tail.length - keep : 0;
+      final shown = tail.sublist(from);
       return ListView.builder(
         controller: _scroll,
         reverse: true,
+        physics: const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
-        itemCount: before.length + 1,
+        itemCount: shown.length + 1,
         itemBuilder: (ctx, i) {
           if (i == 0) {
             return pinned.role == 'user'
                 ? _mine(pinned, w)
                 : _hers(pinned, msgs.length - 1, msgs.length);
           }
-          final m = before[before.length - i];
-          return Opacity(
-            opacity: 0.35,
-            child: m.role == 'user' ? _mine(m, w) : _hers(m, i, before.length),
-          );
+          final m = shown[shown.length - i];
+          return m.role == 'user' ? _mine(m, w) : _hers(m, i, shown.length);
         },
       );
     }
