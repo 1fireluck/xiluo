@@ -1171,7 +1171,7 @@ class _ChatPageState extends State<ChatPage> {
     final w = MediaQuery.of(context).size.width;
     return Scaffold(
       backgroundColor: C.bg,
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: Stack(children: [
               Column(children: [
                 _topBar(),
@@ -1249,28 +1249,13 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  SizedBox(
-                      height: (_editing == null ? 96.0 : 300.0) +
-                          MediaQuery.of(context).viewInsets.bottom),
+                  _editing == null
+                      ? _composer()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Container(key: _panelKey, child: _editPanel()),
+                        ),
               ]),
-              if (_store.curId != 'archive' && _editing == null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: _composer(),
-                ),
-              if (_editing != null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: Container(
-                    key: _panelKey,
-                    color: Colors.transparent,
-                    child: _editPanel(),
-                  ),
-                ),
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
