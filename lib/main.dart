@@ -1136,50 +1136,22 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  _composer(),
-              ]),
-              if (_editing != null) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _cancelEdit,
-                    child: Container(color: const Color(0x8C000000)),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 130),
-                    curve: Curves.easeOutCubic,
-                    builder: (ctx, t, child) => ClipRect(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        heightFactor: t,
-                        child: child,
-                      ),
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_store.cur.msgs.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                              child: _store.cur.msgs.last.role == 'user'
-                                  ? _mine(_store.cur.msgs.last, w)
-                                  : _hers(_store.cur.msgs.last, 0, 1),
+                  _editing == null
+                      ? _composer()
+                      : TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 130),
+                          curve: Curves.easeOutCubic,
+                          builder: (ctx, t, child) => ClipRect(
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              heightFactor: t,
+                              child: child,
                             ),
-                          _editPanel(),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                          ),
+                          child: _editPanel(),
+                        ),
+              ]),
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
