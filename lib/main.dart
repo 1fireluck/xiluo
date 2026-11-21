@@ -1083,16 +1083,6 @@ class _ChatPageState extends State<ChatPage> {
                         child: _list(w),
                       ),
                     ),
-                    if (_editing != null)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _cancelEdit,
-                          onVerticalDragEnd: (_) => _cancelEdit(),
-                          onHorizontalDragEnd: (_) => _cancelEdit(),
-                          child: Container(color: const Color(0xB8000000)),
-                        ),
-                      ),
                     if (_showJump && _ready)
                       Positioned(
                         right: 14,
@@ -1146,8 +1136,43 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  _editing == null ? _composer() : _editPanel(),
+                  _composer(),
               ]),
+              if (_editing != null) ...[
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _cancelEdit,
+                    onVerticalDragEnd: (_) => _cancelEdit(),
+                    onHorizontalDragEnd: (_) => _cancelEdit(),
+                    child: Container(color: const Color(0xB8000000)),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    color: const Color(0xFF151517),
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_editing != null)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                              child: _editing!.role == 'user'
+                                  ? _mine(_editing!, w)
+                                  : _hers(_editing!, 0, 1),
+                            ),
+                          _editPanel(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               if (_drawer)
                 Positioned.fill(
                   child: GestureDetector(
@@ -1207,8 +1232,8 @@ class _ChatPageState extends State<ChatPage> {
     if (_store.curId == 'archive') return _archiveList(w);
     var msgs = _store.cur.msgs;
     // EDIT-CUT：编辑时截到被改那条为止，它就贴在修改栏正上方
-    if (_editing != null && _editIdx >= 0 && _editIdx < msgs.length) {
-      msgs = msgs.sublist(0, _editIdx + 1);
+    if (_editing != null && _editIdx > 0 && _editIdx <= msgs.length) {
+      msgs = msgs.sublist(0, _editIdx);
     }
     // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
     // 这样那条消息自然贴到输入栏正上方，位置固定。
