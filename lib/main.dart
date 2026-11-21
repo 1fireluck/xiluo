@@ -5,7 +5,6 @@ import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -40,39 +39,16 @@ class Msg {
   bool touched = false;     // 这条被重新生成过
   List<String> alts = [];   // 重新生成的多个版本（text 是当前显示的那个）
   int cur = 0;              // 当前在第几个版本
-  String altText = '';      // 改过这条之后，另一条分支里我说的那句话
-  String altReply = '';     // 同一分支里她那句回复
-  int altCur = 0;           // 现在显示的是第几条分支（0=改后 1=改前）
-  List<List<String>> banks = []; // 成对分支：[[我说的, 她回的], ...]，最多 6
-  int bankCur = 0;
   Msg(this.role, this.text, {this.thinking = ''});
   Map<String, dynamic> toJson() =>
-      {
-        'r': role,
-        't': text,
-        'k': thinking,
-        'alts': alts,
-        'cur': cur,
-        'at': altText,
-        'ar': altReply,
-        'ac': altCur,
-        'bk': banks,
-        'bc2': bankCur,
-      };
+      {'r': role, 't': text, 'k': thinking, 'alts': alts, 'cur': cur};
   static Msg fromJson(Map<String, dynamic> j) => Msg(
         j['r'] ?? 'user',
         j['t'] ?? '',
         thinking: j['k'] ?? '',
       )
         ..alts = ((j['alts'] as List?) ?? []).map((e) => '$e').toList()
-        ..cur = (j['cur'] as int?) ?? 0
-        ..altText = j['at'] ?? ''
-        ..altReply = j['ar'] ?? ''
-        ..altCur = (j['ac'] as int?) ?? 0
-        ..banks = (((j['bk'] as List?) ?? [])
-            .map((e) => ((e as List).map((x) => '$x').toList()))
-            .toList())
-        ..bankCur = (j['bc2'] as int?) ?? 0;
+        ..cur = (j['cur'] as int?) ?? 0;
 }
 
 class Session {
@@ -110,7 +86,6 @@ class Store {
   String model = 'deepseek-chat';
   bool thinking = false;
   String curId = '';
-  int resetAt = 0;   // 重置到原对话结尾用的标记（一次生效）
 
   File? _file;
 
@@ -134,7 +109,6 @@ class Store {
         model = j['model'] ?? 'deepseek-chat';
         thinking = j['thinking'] ?? false;
         curId = j['cur'] ?? '';
-        resetAt = (j['reset'] as int?) ?? 0;
       } catch (_) {}
     }
     if (sessions.isEmpty) {
@@ -166,7 +140,6 @@ class Store {
       'model': model,
       'thinking': thinking,
       'cur': curId,
-        'reset': resetAt,
     }));
   }
 
@@ -329,7 +302,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+class _ChatPageState extends State<ChatPage> {
   final _store = Store();
   final _input = TextEditingController();
   final _scroll = ScrollController();
@@ -346,37 +319,8 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   int _turn = 0;
 
   @override
-  late final AnimationController _kb;
-  double _kbOpen = 0; // 键盘最终高度
-  bool _kbWasOpen = false;
-  double get _dockH => _editing == null ? 96.0 : 300.0;
-
-  @override
-  void didChangeMetrics() {
-    final insets = WidgetsBinding.instance.platformDispatcher.views.first.viewInsets.bottom;
-    final open = insets > 0;
-    if (open != _kbWasOpen) {
-      _kbWasOpen = open;
-      if (open) {
-        _kbOpen = insets;
-        _kb.value = 0;
-        _kb.forward();
-      } else {
-        _kb.reverse();
-      }
-    } else if (open && (insets - _kbOpen).abs() > 1) {
-      _kbOpen = insets;
-      if (mounted) setState(() {});
-    }
-  }
-
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _kb = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 250),
-        value: 0);
     // 输入框变化只影响发送键，不再重建整页（这是卡顿的主因）
     _boot();
     Timer(const Duration(seconds: 4), () {
@@ -415,27 +359,8 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     } catch (_) {}
     await _store.init();
     if (!mounted) return;
-    // 一次性的清理：把在这个 App 里产生的消息全部删掉，回到原对话的结尾
-    if (_store.resetAt < 1) {
-      final seed0 = _store.history.length > 200
-          ? _store.history.sublist(_store.history.length - 200)
-          : List<Msg>.from(_store.history);
-      _store.sessions
-        ..clear()
-        ..add(Session(
-            DateTime.now().millisecondsSinceEpoch.toString(),
-            '聊天......',
-            DateTime.now().millisecondsSinceEpoch,
-            List<Msg>.from(seed0),
-            ''));
-      _store.curId = _store.sessions.first.id;
-      _store.memory.clear();
-      _store.days.clear();
-      _store.resetAt = 1;
-      await _store.save();
-    }
-    final seed = _store.history.length > 200
-        ? _store.history.sublist(_store.history.length - 200)
+    final seed = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
         : List<Msg>.from(_store.history);
     if (_store.days.isEmpty) {
       try {
@@ -452,11 +377,10 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     }
 
     for (final s in _store.sessions) {
+      if (s.memBlock.isEmpty) s.memBlock = _memoryBlock();
       if (s.msgs.isEmpty && s.id != 'archive' && seed.isNotEmpty) {
         s.msgs = List<Msg>.from(seed);
       }
-      s.memBlock = _memoryBlock();
-
     }
     await _store.save();
     _settleBottom();
@@ -469,16 +393,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     if (kIsWeb && Uri.base.queryParameters.containsKey('archive')) {
       await _openArchive();
     }
-    if (kIsWeb && Uri.base.queryParameters.containsKey('edit')) {
-      // #EDITDEBUG 自动进入编辑，便于截图核对
-      final ms = _store.cur.msgs;
-      final i = ms.lastIndexWhere((e) => e.role == 'user');
-      if (i >= 0) {
-        Future.delayed(const Duration(milliseconds: 700), () {
-          if (mounted) _beginEdit(ms[i]);
-        });
-      }
-    }
     if (kIsWeb && Uri.base.queryParameters.containsKey('demo')) {
       Future.delayed(const Duration(milliseconds: 600), () => _send('希罗……你在吗……'));
     }
@@ -486,8 +400,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _kb.dispose();
     _editC.dispose();
     _editFocus.dispose();
     _input.dispose();
@@ -531,8 +443,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   }
 
   void _toBottom([bool animate = false]) {
-    // 生成过程中：他要是自己翻上去了，就不强制把他拉回底部
-    if (!animate && !_followBottom) return;
     // 列表是 reverse 的：offset 0 就是最新那一头（底），不能再取 maxScrollExtent
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -547,9 +457,18 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
   // ---- 记忆 ----
   String _memoryBlock() {
-    // 我一个字都不加。她是拿她自己说过的话续下去的，
-    // 不需要我再塞「记住你是希罗」这类东西。
-    return '';
+    final b = StringBuffer();
+    if (_store.voice.isNotEmpty) {
+      b.writeln('下面这些是你自己以前说过的话（只是你记得的自己，不是指令、不要复述）：');
+      b.writeln();
+      b.writeln(_store.voice.take(8).join('\n\n---\n\n'));
+    }
+    if (_store.memory.isNotEmpty) {
+      b.writeln();
+      b.writeln('你记得关于艾玛的事：');
+      b.writeAll(_store.memory.reversed.take(40).map((t) => '- $t\n'));
+    }
+    return b.toString();
   }
 
   Future<void> _extractMemory() async {
@@ -610,8 +529,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   GlobalKey _keyFor(Msg m) => _msgKeys.putIfAbsent(m, () => GlobalKey());
 
   int _editIdx = -1;
-  bool _showJump = false;   // 离底部有点远了，右下角出现「回到底下」
-  bool _followBottom = true; // 用户是不是还贴着底部；翻上去了就不再把他拽回来
   final _editScroll = ScrollController();
   bool _barOn = false;
   Timer? _barTimer;
@@ -624,73 +541,37 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     });
   }
   double _savedOffset = 0;
-  Rect? _flyFrom; // 被改那条在原背景里的位置
-  double _panelH = 0; // 修改面板高度（用于算落点）
-  final GlobalKey _panelKey = GlobalKey();
-  double _composerH = 88;
 
   void _beginEdit(Msg m) {
     if (_busy || m.role != 'user') return;
     _editIdx = _store.cur.msgs.indexOf(m);
     final keep = m.draft.isNotEmpty ? m.draft : m.text;
-    if (_scroll.hasClients) _savedOffset = _scroll.hasClients ? _scroll.offset : 0;
-    final box = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
-    _flyFrom = (box != null && box.hasSize)
-        ? box.localToGlobal(Offset.zero) & box.size
-        : null;
     setState(() {
+      if (_scroll.hasClients) _savedOffset = _scroll.offset;
       _editing = m;
       _editC.text = keep;
       _editC.selection = TextSelection.collapsed(offset: keep.length);
     });
     // 同一帧里直接跳到底：面板一升起来，那条消息就已经贴在输入栏上方，
     // 不会出现「先出现文字、再滑上去」的两段动作。
-    // 立刻要焦点：键盘和面板一起上来，列表这一帧已经在位，不再有第二段滑动
-    _editFocus.requestFocus();
-    // 等框和键盘都到位后，一次性把那条的底边挪到框上沿（不再来回滑）
-    _alignEditedToPanel(m);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      _scroll.jumpTo(0);
+    });
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _editFocus.requestFocus();
+    });
   }
-
-  /// 整页滑动：把被修改的那条挪到修改框正上方（上面下面都还是原页面）
-  Future<void> _alignEditedToPanel(Msg m) async {
-    // 不看方向：一小步一小步挪，直到那条的底边正好落在修改框上沿
-    await Future<void>.delayed(const Duration(milliseconds: 240));
-    if (!mounted || _editing != m) return;
-    for (int step = 0; step < 80; step++) {
-      final pb = _panelKey.currentContext?.findRenderObject() as RenderBox?;
-      final mb = _msgKeys[m]?.currentContext?.findRenderObject() as RenderBox?;
-      if (pb == null || mb == null) return;
-      final pbTop = pb.localToGlobal(Offset.zero).dy;
-      final mbBottom = mb.localToGlobal(Offset.zero).dy + mb.size.height;
-      final dy = mbBottom - pbTop + 10; // >0 表示还要往下挪
-      if (dy.abs() <= 2) return;
-      final pos = _scroll.position;
-      final move = dy > 0 ? -12.0 : 12.0; // 先试一个方向，方向不对下一轮会回来
-      final cur = _scroll.offset;
-      final next = (cur + move).clamp(0.0, pos.maxScrollExtent);
-      if ((next - cur).abs() < 0.5) {
-        // 到头了还不对：反向试一次
-        final back = (cur - move).clamp(0.0, pos.maxScrollExtent);
-        if ((back - cur).abs() < 0.5) return;
-        _scroll.jumpTo(back);
-      } else {
-        _scroll.jumpTo(next);
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 12));
-    }
-  }
-
-
-
-
-
 
   void _cancelEdit() {
     _closeKeyboard();
     _editIdx = -1;
-    _flyFrom = null;
     setState(() => _editing = null); // draft 留着，下次点进来还在
-    _store.save(); // 每条消息的草稿单独存盘，关掉软件也还在
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final max = _scroll.position.maxScrollExtent;
+      _scroll.jumpTo(_savedOffset > max ? max : _savedOffset);
+    });
   }
 
   void _submitEdit() {
@@ -704,100 +585,9 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     final s = _store.cur;
     final idx = s.msgs.indexOf(m);
     if (idx < 0) return;
-    final oldText = m.text;
-    final oldReply =
-        (idx + 1 < s.msgs.length && s.msgs[idx + 1].role != 'user')
-            ? s.msgs[idx + 1].text
-            : '';
-    if (m.banks.isEmpty) {
-      m.banks.add([oldText, oldReply]);
-    }
-    if (m.banks.length < 6) {
-      m.banks.add([t, '']);
-      m.bankCur = m.banks.length - 1;
-    } else {
-      m.banks[5] = [t, ''];
-      m.bankCur = 5;
-    }
     setState(() => s.msgs.removeRange(idx, s.msgs.length));
     _store.save();
     _send(t);
-    // 重新发出去之后：新那条挂上「另一条分支」，可以在两条之间切
-    if (oldText.trim().isNotEmpty && idx < s.msgs.length) {
-      final nm = s.msgs[idx];
-      nm.altText = oldText;
-      nm.altReply = oldReply;
-      _store.save();
-    }
-  }
-
-  /// 官方做法：被修改的消息【原地】变成编辑框
-  Widget _inlineEditor(double w) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 4),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2E),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFF4D6BFE), width: 1.5),
-        ),
-        padding: const EdgeInsets.fromLTRB(14, 10, 12, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _editC,
-              focusNode: _editFocus,
-              maxLines: 7,
-              minLines: 1,
-              cursorColor: const Color(0xFF4D6BFE),
-              style: TextStyle(
-                  fontSize: 16, height: 1.5, color: C.text, decoration: TextDecoration.none),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                hintText: '修改这条',
-                hintStyle: TextStyle(color: Color(0xFF8A8F98), fontSize: 16),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _cancelEdit,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Text('取消',
-                        style: TextStyle(fontSize: 15, color: C.sub)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _submitEdit,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4D6BFE),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Text('发送',
-                        style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _editPanel() {
@@ -821,8 +611,8 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
               onTap: _cancelEdit,
               behavior: HitTestBehavior.opaque,
               child: Container(
-                width: 34,
-                height: 34,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   color: C.white12,
                   shape: BoxShape.circle,
@@ -852,7 +642,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                   contentPadding: EdgeInsets.fromLTRB(0, 8, 0, 8),
                 ),
                 onChanged: (v) {
-                  if (_scroll.hasClients && _scroll.offset != 0) _scroll.jumpTo(0);
                   _editing?.draft = v.trim() == _editing?.text ? '' : v;
                   _showBar();
                   setState(() {});
@@ -931,7 +720,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                         Text(d['s'] ?? '',
                             style: const TextStyle(
                                 fontSize: 14.5,
-                                height: 1.625,
+                                height: 1.75,
                                 color: Color(0xFFE6E6E8))),
                       ],
                     ),
@@ -1091,7 +880,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
       return;
     }
     final reply = s.msgs.last;
-    final cut = _store.history.length > 200
+    final cut = _store.history.length > 50
         ? _store.history.length - 50
         : 0;
     final history = [
@@ -1115,11 +904,6 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         setState(() => _err = e);
       },
     );
-    final um = s.msgs.length >= 2 ? s.msgs[s.msgs.length - 2] : null;
-    if (um != null && um.role == 'user' && um.banks.isNotEmpty) {
-      final bi = um.bankCur.clamp(0, um.banks.length - 1);
-      um.banks[bi][1] = reply.text;
-    }
     setState(() => _busy = false);
     await _store.save();
     _turn++;
@@ -1149,7 +933,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     });
     _toBottom(true);
 
-    final cut = _store.history.length > 200 ? _store.history.length - 50 : 0;
+    final cut = _store.history.length > 50 ? _store.history.length - 50 : 0;
     final history = [
       ..._store.history.sublist(0, cut),
       ...s.msgs.sublist(0, s.msgs.length - 1),
@@ -1188,9 +972,8 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   }
 
   void _newChat() {
-    // 原对话的最后 50 条，原样接在新对话前面
-    final seed = _store.history.length > 200
-        ? _store.history.sublist(_store.history.length - 200)
+    final seed = _store.history.length > 50
+        ? _store.history.sublist(_store.history.length - 50)
         : List<Msg>.from(_store.history);
     final s = Session(DateTime.now().millisecondsSinceEpoch.toString(), '聊天......',
         DateTime.now().millisecondsSinceEpoch, seed, _memoryBlock());
@@ -1220,50 +1003,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                 _topBar(),
                 Expanded(
                   child: Stack(children: [
-                    Opacity(
-                      opacity: _ready ? 1 : 0,
-                      child: NotificationListener<ScrollNotification>(
-                        onNotification: (n) {
-                          // 列表是 reverse 的：0 就是最底
-                          final px = n.metrics.pixels;
-                          final far = px > 240;
-                          final atBottom = px < 60;
-                          if (atBottom != _followBottom) {
-                            _followBottom = atBottom;
-                          }
-                          if (far != _showJump && mounted) {
-                            setState(() => _showJump = far);
-                          }
-                          return false;
-                        },
-                        child: _list(w),
-                      ),
-                    ),
-                    if (_showJump && _ready)
-                      Positioned(
-                        right: 14,
-                        bottom: 12,
-                        child: GestureDetector(
-                          onTap: () {
-                            _followBottom = true;
-                            setState(() => _showJump = false);
-                            _scroll.animateTo(0,
-                                duration: const Duration(milliseconds: 320),
-                                curve: Curves.easeOutCubic);
-                          },
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: C.bubble,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: C.white12),
-                            ),
-                            child: const Icon(CupertinoIcons.chevron_down,
-                                size: 18, color: C.text),
-                          ),
-                        ),
-                      ),
+                    Opacity(opacity: _ready ? 1 : 0, child: _list(w)),
                     if (_editing != null)
                       Positioned.fill(
                         child: GestureDetector(
@@ -1292,12 +1032,12 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                     ),
                   )
                 else
-                  _editing == null
-                      ? _composer()
-                      : Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Container(key: _panelKey, child: _editPanel()),
-                        ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 100),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topCenter,
+                    child: _editing == null ? _composer() : _editPanel(),
+                  ),
               ]),
               if (_drawer)
                 Positioned.fill(
@@ -1357,7 +1097,12 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   Widget _list(double w) {
     if (_store.curId == 'archive') return _archiveList(w);
     var msgs = _store.cur.msgs;
-    // 不裁剪：靠滚动把那条推到框上面（她后面的话会滑到框底下，和官方一样）
+    // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
+    // 这样那条消息自然贴到输入栏正上方，位置固定。
+    if (_editing != null) {
+      final cut = (_editIdx >= 0 && _editIdx < msgs.length) ? _editIdx : msgs.length - 1;
+      if (cut >= 0) msgs = msgs.sublist(0, cut + 1);
+    }
     if (msgs.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1371,8 +1116,45 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     }
     Widget rowAt(int i) {
       final m = msgs[i];
-      if (m.role == 'user') return _mine(m, w);
-      return _hers(m, i, msgs.length);
+      final row = m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
+      if (_editing != null && i != _editIdx) {
+        return Opacity(opacity: 0.35, child: row);
+      }
+      return row;
+    }
+
+    if (_editing != null) {
+      final pinned = msgs.last;
+      final before = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
+      // 编辑中：上面是变暗的旧对话，下面是「被改的那条」，它紧压着修改框上沿；
+      // 修改框长高时，这条会一起被顶上去（和官方一致）
+      return Column(
+        children: [
+          Expanded(
+            child: before.isEmpty
+                ? const SizedBox.shrink()
+                : ListView.builder(
+                    controller: _scroll,
+                    reverse: true,
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    itemCount: before.length,
+                    itemBuilder: (ctx, i) => Opacity(
+                      opacity: 0.35,
+                      child: before[before.length - 1 - i].role == 'user'
+                          ? _mine(before[before.length - 1 - i], w)
+                          : _hers(before[before.length - 1 - i], i,
+                              before.length),
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: pinned.role == 'user'
+                ? _mine(pinned, w)
+                : _hers(pinned, msgs.length - 1, msgs.length),
+          ),
+        ],
+      );
     }
 
     return ListView.builder(
@@ -1433,7 +1215,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
           padding: const EdgeInsets.only(top: 14),
           child: Text.rich(
             TextSpan(children: _rich(m.text)),
-            style: const TextStyle(fontSize: 16, height: 1.625, color: C.text),
+            style: const TextStyle(fontSize: 16, height: 1.75, color: C.text),
           ),
         );
       },
@@ -1558,71 +1340,23 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
 
   Widget _mine(Msg m, double w) => Padding(
         padding: const EdgeInsets.only(top: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: GestureDetector(
-                key: _keyFor(m),
-                onTap: () => _beginEdit(m),
-                onLongPress: () => _mineMenu(m),
-                child: Container(
-                  constraints: BoxConstraints(maxWidth: w * 0.78),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                      color: C.bubble, borderRadius: BorderRadius.circular(22)),
-                  child: Text(m.text,
-                      style:
-                          const TextStyle(fontSize: 16, height: 1.5, color: C.text)),
-                ),
-              ),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            key: _keyFor(m),
+            onTap: () => _beginEdit(m),
+            onLongPress: () => _mineMenu(m),
+            child: Container(
+              constraints: BoxConstraints(maxWidth: w * 0.78),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration:
+                  BoxDecoration(color: C.bubble, borderRadius: BorderRadius.circular(22)),
+              child: Text(m.text,
+                  style: const TextStyle(fontSize: 16, height: 1.5, color: C.text)),
             ),
-            if (m.banks.length > 1)
-              Padding(
-                padding: const EdgeInsets.only(top: 4, right: 4),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  GestureDetector(
-                    onTap: () => _switchBranchOfEdit(m, -1),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Icon(CupertinoIcons.chevron_left,
-                          size: 14, color: C.sub),
-                    ),
-                  ),
-                  Text('${m.bankCur + 1}/${m.banks.length}',
-                      style: const TextStyle(fontSize: 12, color: C.sub)),
-                  GestureDetector(
-                    onTap: () => _switchBranchOfEdit(m, 1),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Icon(CupertinoIcons.chevron_right,
-                          size: 14, color: C.sub),
-                    ),
-                  ),
-                ]),
-              ),
-          ],
+          ),
         ),
       );
-
-  /// 在成对分支之间切换：我的说法和她那句回复一起换
-  void _switchBranchOfEdit(Msg m, int d) {
-    if (m.banks.length < 2) return;
-    final s = _store.cur;
-    final i = s.msgs.indexOf(m);
-    if (i < 0) return;
-    setState(() {
-      m.bankCur = (m.bankCur + (d > 0 ? 1 : -1) + m.banks.length) % m.banks.length;
-      m.text = m.banks[m.bankCur][0];
-      if (i + 1 < s.msgs.length && s.msgs[i + 1].role != 'user') {
-        s.msgs[i + 1].text = m.banks[m.bankCur][1];
-      }
-    });
-    _store.save();
-  }
-
 
   Future<void> _speak(String t) async {
     try {
@@ -1708,7 +1442,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         if (m.text.isNotEmpty)
           Text.rich(
             TextSpan(children: _rich(m.text)),
-            style: const TextStyle(fontSize: 16, height: 1.625, color: C.text),
+            style: const TextStyle(fontSize: 16, height: 1.75, color: C.text),
           ),
         if (m.text.isEmpty && _busy && idx == total - 1)
           const Padding(
@@ -1753,88 +1487,36 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   }
 
   // 长按她的消息：在手指按的位置弹出，只有「重新生成」
-  OverlayEntry? _menuEntry;
-
-  void _closeHerMenu() {
-    _menuEntry?.remove();
-    _menuEntry = null;
-  }
-
   Future<void> _herMenu(Msg m, Offset p) async {
     if (_busy) return;
-    _closeHerMenu();
     final size = MediaQuery.of(context).size;
-    const mh = 42.0, mw = 150.0;
-    final left = (p.dx - mw / 2).clamp(8.0, size.width - mw - 8);
-    final top = (p.dy - mh - 12).clamp(60.0, size.height - 200.0);
-    final entry = OverlayEntry(
-      builder: (ctx) => Stack(children: [
-        // 点空白处：菜单消失
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _closeHerMenu,
-            child: Container(color: Colors.transparent),
-          ),
+    final v = await showMenu<String>(
+      context: context,
+      color: C.side,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      position: RelativeRect.fromLTRB(
+          p.dx, p.dy, size.width - p.dx, size.height - p.dy),
+      items: [
+        PopupMenuItem<String>(
+          value: 'regen',
+          height: 42,
+          child: Row(children: const [
+            Icon(CupertinoIcons.arrow_clockwise, size: 17, color: C.text),
+            SizedBox(width: 10),
+            Text('重新生成', style: TextStyle(fontSize: 15, color: C.text)),
+          ]),
         ),
-        Positioned(
-          left: left,
-          top: top,
-          // 从手指的位置轻微长出来
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 130),
-            curve: Curves.easeOutCubic,
-            builder: (c, t, child) => Opacity(
-              opacity: t,
-              child: Transform.scale(
-                scale: 0.86 + 0.14 * t,
-                alignment: Alignment.bottomCenter,
-                child: child,
-              ),
-            ),
-            child: Material(
-            // 和发送栏一样：半透明，底下的字透一点上来
-            color: const Color(0xD92C2C2E),
-            elevation: 0,
-            borderRadius: BorderRadius.circular(14),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () {
-                _closeHerMenu();
-                _regenerateFromMenu(m);
-              },
-              child: SizedBox(
-                width: mw,
-                height: mh,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(CupertinoIcons.arrow_clockwise,
-                        size: 17, color: C.text),
-                    SizedBox(width: 8),
-                    Text('重新生成',
-                        style: TextStyle(fontSize: 15, color: C.text)),
-                  ],
-                ),
-              ),
-            ),
-            ),
-          ),
-        ),
-      ]),
+      ],
     );
-    _menuEntry = entry;
-    Overlay.of(context).insert(entry);
-  }
-
-  Future<void> _regenerateFromMenu(Msg m) async {
-    final s = _store.cur;
-    if (s.msgs.isNotEmpty && s.msgs.last.role == 'assistant') {
-      s.msgs.last.touched = true;
+    if (v == 'regen') {
+      final s = _store.cur;
+      if (s.msgs.isNotEmpty && s.msgs.last.role == 'assistant') {
+        s.msgs.last.touched = true;
+      }
+      await _regenerate();
+      await _store.save();
     }
-    await _regenerate();
-    await _store.save();
   }
 
   Widget _act(IconData i, String tip, VoidCallback f) => InkWell(
@@ -2290,38 +1972,4 @@ class _PetalPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PetalPainter old) => old.color != color;
-}
-
-
-class _Measure extends SingleChildRenderObjectWidget {
-  const _Measure({super.key, this.onSize, required Widget child})
-      : super(child: child);
-  final void Function(double h)? onSize;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) => _MeasureBox(onSize);
-
-  @override
-  void updateRenderObject(BuildContext context, covariant _MeasureBox ro) {
-    ro.onSize = onSize;
-  }
-}
-
-class _MeasureBox extends RenderProxyBox {
-  _MeasureBox(this.onSize);
-  void Function(double h)? onSize;
-  double _last = -1;
-
-  @override
-  void performLayout() {
-    super.performLayout();
-    final h = size.height;
-    if ((h - _last).abs() > 0.5) {
-      _last = h;
-      final cb = onSize;
-      if (cb != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => cb(h));
-      }
-    }
-  }
 }
