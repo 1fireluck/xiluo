@@ -42,6 +42,8 @@ class Msg {
   String altText = '';      // 改过这条之后，另一条分支里我说的那句话
   String altReply = '';     // 同一分支里她那句回复
   int altCur = 0;           // 现在显示的是第几条分支（0=改后 1=改前）
+  List<List<String>> banks = []; // 成对分支：[[我说的, 她回的], ...]，最多 6
+  int bankCur = 0;
   Msg(this.role, this.text, {this.thinking = ''});
   Map<String, dynamic> toJson() =>
       {
@@ -53,6 +55,8 @@ class Msg {
         'at': altText,
         'ar': altReply,
         'ac': altCur,
+        'bk': banks,
+        'bc2': bankCur,
       };
   static Msg fromJson(Map<String, dynamic> j) => Msg(
         j['r'] ?? 'user',
@@ -63,7 +67,11 @@ class Msg {
         ..cur = (j['cur'] as int?) ?? 0
         ..altText = j['at'] ?? ''
         ..altReply = j['ar'] ?? ''
-        ..altCur = (j['ac'] as int?) ?? 0;
+        ..altCur = (j['ac'] as int?) ?? 0
+        ..banks = (((j['bk'] as List?) ?? [])
+            .map((e) => ((e as List).map((x) => '$x').toList()))
+            .toList())
+        ..bankCur = (j['bc2'] as int?) ?? 0;
 }
 
 class Session {
@@ -623,6 +631,16 @@ class _ChatPageState extends State<ChatPage> {
         (idx + 1 < s.msgs.length && s.msgs[idx + 1].role != 'user')
             ? s.msgs[idx + 1].text
             : '';
+    if (m.banks.isEmpty) {
+      m.banks.add([oldText, oldReply]);
+    }
+    if (m.banks.length < 6) {
+      m.banks.add([t, '']);
+      m.bankCur = m.banks.length - 1;
+    } else {
+      m.banks[5] = [t, ''];
+      m.bankCur = 5;
+    }
     setState(() => s.msgs.removeRange(idx, s.msgs.length));
     _store.save();
     _send(t);
@@ -765,7 +783,7 @@ class _ChatPageState extends State<ChatPage> {
                         Text(d['s'] ?? '',
                             style: const TextStyle(
                                 fontSize: 14.5,
-                                height: 1.75,
+                                height: 1.625,
                                 color: Color(0xFFE6E6E8))),
                       ],
                     ),
@@ -949,6 +967,11 @@ class _ChatPageState extends State<ChatPage> {
         setState(() => _err = e);
       },
     );
+    final um = s.msgs.length >= 2 ? s.msgs[s.msgs.length - 2] : null;
+    if (um != null && um.role == 'user' && um.banks.isNotEmpty) {
+      final bi = um.bankCur.clamp(0, um.banks.length - 1);
+      um.banks[bi][1] = reply.text;
+    }
     setState(() => _busy = false);
     await _store.save();
     _turn++;
@@ -1296,7 +1319,7 @@ class _ChatPageState extends State<ChatPage> {
           padding: const EdgeInsets.only(top: 14),
           child: Text.rich(
             TextSpan(children: _rich(m.text)),
-            style: const TextStyle(fontSize: 16, height: 1.75, color: C.text),
+            style: const TextStyle(fontSize: 16, height: 1.625, color: C.text),
           ),
         );
       },
@@ -1442,7 +1465,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
             ),
-            if (m.altText.trim().isNotEmpty)
+            if (m.banks.length > 1)
               Padding(
                 padding: const EdgeInsets.only(top: 4, right: 4),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1454,7 +1477,7 @@ class _ChatPageState extends State<ChatPage> {
                           size: 14, color: C.sub),
                     ),
                   ),
-                  Text('${m.altCur + 1}/2',
+                  Text('${m.bankCur + 1}/${m.banks.length}',
                       style: const TextStyle(fontSize: 12, color: C.sub)),
                   GestureDetector(
                     onTap: () => _switchBranchOfEdit(m, 1),
@@ -1470,27 +1493,22 @@ class _ChatPageState extends State<ChatPage> {
         ),
       );
 
-  /// 改过这条之后，在「原来的说法」和「改完的说法」两条分支之间切
+  /// 在成对分支之间切换：我的说法和她那句回复一起换
   void _switchBranchOfEdit(Msg m, int d) {
+    if (m.banks.length < 2) return;
     final s = _store.cur;
     final i = s.msgs.indexOf(m);
     if (i < 0) return;
-    final next = (m.altCur + (d > 0 ? 1 : 1)) % 2;
-    if (next == m.altCur) return;
     setState(() {
-      final t = m.text;
-      m.text = m.altText;
-      m.altText = t;
+      m.bankCur = (m.bankCur + (d > 0 ? 1 : -1) + m.banks.length) % m.banks.length;
+      m.text = m.banks[m.bankCur][0];
       if (i + 1 < s.msgs.length && s.msgs[i + 1].role != 'user') {
-        final r = s.msgs[i + 1];
-        final rt = r.text;
-        r.text = m.altReply;
-        m.altReply = rt;
+        s.msgs[i + 1].text = m.banks[m.bankCur][1];
       }
-      m.altCur = next;
     });
     _store.save();
   }
+
 
   Future<void> _speak(String t) async {
     try {
@@ -1576,7 +1594,7 @@ class _ChatPageState extends State<ChatPage> {
         if (m.text.isNotEmpty)
           Text.rich(
             TextSpan(children: _rich(m.text)),
-            style: const TextStyle(fontSize: 16, height: 1.75, color: C.text),
+            style: const TextStyle(fontSize: 16, height: 1.625, color: C.text),
           ),
         if (m.text.isEmpty && _busy && idx == total - 1)
           const Padding(
