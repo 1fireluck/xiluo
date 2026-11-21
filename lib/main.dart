@@ -1271,15 +1271,9 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   )
                 else
-                  (_editing == null
-                      ? SizedBox(
-                          height: 78 + MediaQuery.of(context).viewInsets.bottom)
-                      : Padding(
-                          key: _panelKey,
-                          padding: EdgeInsets.only(
-                              bottom: MediaQuery.of(context).viewInsets.bottom),
-                          child: _editPanel(),
-                        )),
+                  SizedBox(
+                      height: (_editing == null ? 78 : 190) +
+                          MediaQuery.of(context).viewInsets.bottom),
               ]),
               if (_store.curId != 'archive' && _editing == null)
                 Positioned(
@@ -1287,6 +1281,17 @@ class _ChatPageState extends State<ChatPage> {
                   right: 0,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
                   child: _composer(),
+                ),
+              if (_editing != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                  child: Container(
+                    key: _panelKey,
+                    color: Colors.transparent,
+                    child: _editPanel(),
+                  ),
                 ),
               if (_drawer)
                 Positioned.fill(
@@ -1346,12 +1351,6 @@ class _ChatPageState extends State<ChatPage> {
   Widget _list(double w) {
     if (_store.curId == 'archive') return _archiveList(w);
     var msgs = _store.cur.msgs;
-    // EDIT-CUT：编辑时截到被改那条为止，它就贴在修改栏正上方
-    if (_editing != null && _editIdx > 0 && _editIdx <= msgs.length) {
-      msgs = msgs.sublist(0, _editIdx);
-    }
-    // 编辑时：把被编辑那条之后的话暂时收起（它们本来就会被新话替换），
-    // 这样那条消息自然贴到输入栏正上方，位置固定。
     if (msgs.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1365,36 +1364,8 @@ class _ChatPageState extends State<ChatPage> {
     }
     Widget rowAt(int i) {
       final m = msgs[i];
-      final row = m.role == 'user' ? _mine(m, w) : _hers(m, i, msgs.length);
-      return row;
-    }
-
-    if (_editing != null) {
-      final pinned = msgs.last;
-      final tail = msgs.length > 1 ? msgs.sublist(0, msgs.length - 1) : <Msg>[];
-      // 编辑时不能滚动：只画屏幕里看得见的这几条（外加被改的那条），
-      // 几百条不用排，这一帧就轻了。
-      const keep = 12;
-      final from = tail.length > keep ? tail.length - keep : 0;
-      final shown = tail.sublist(from);
-      return ListView.builder(
-        controller: _scroll,
-        reverse: true,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
-        itemCount: shown.length + 1,
-        itemBuilder: (ctx, i) {
-          if (i == 0) {
-            return pinned.role == 'user'
-                ? _mine(pinned, w)
-                : _hers(pinned, msgs.length - 1, msgs.length);
-          }
-          final m = shown[shown.length - i];
-          final wdg = m.role == 'user' ? _mine(m, w) : _hers(m, i, shown.length);
-          // 正在改的那条：原地留出高度（背景一点不动），本体由浮层画
-          return m == _editing ? Opacity(opacity: 0, child: wdg) : wdg;
-        },
-      );
+      if (m.role == 'user') return _mine(m, w);
+      return _hers(m, i, msgs.length);
     }
 
     return ListView.builder(
