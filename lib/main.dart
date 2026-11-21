@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -595,6 +596,7 @@ class _ChatPageState extends State<ChatPage> {
   Rect? _flyFrom; // 被改那条在原背景里的位置
   double _panelH = 0; // 修改面板高度（用于算落点）
   final GlobalKey _panelKey = GlobalKey();
+  double _composerH = 88;
 
   void _beginEdit(Msg m) {
     if (_busy || m.role != 'user') return;
@@ -1272,7 +1274,9 @@ class _ChatPageState extends State<ChatPage> {
                   )
                 else
                   SizedBox(
-                      height: (_editing == null ? 78 : 190) +
+                      height: (_editing == null
+                              ? _composerH
+                              : (_panelH <= 0 ? 190 : _panelH)) +
                           MediaQuery.of(context).viewInsets.bottom),
               ]),
               if (_store.curId != 'archive' && _editing == null)
@@ -1280,16 +1284,33 @@ class _ChatPageState extends State<ChatPage> {
                   left: 0,
                   right: 0,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: _composer(),
+                  child: _Measure(
+                    onSize: (h) {
+                      if ((_composerH - h).abs() > 0.5) {
+                        _composerH = h;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) setState(() {});
+                        });
+                      }
+                    },
+                    child: _composer(),
+                  ),
                 ),
               if (_editing != null)
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
-                  child: Container(
+                  child: _Measure(
                     key: _panelKey,
-                    color: Colors.transparent,
+                    onSize: (h) {
+                      if ((_panelH - h).abs() > 0.5) {
+                        _panelH = h;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) setState(() {});
+                        });
+                      }
+                    },
                     child: _editPanel(),
                   ),
                 ),
@@ -2283,4 +2304,38 @@ class _PetalPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PetalPainter old) => old.color != color;
+}
+
+
+class _Measure extends SingleChildRenderObjectWidget {
+  const _Measure({super.key, this.onSize, required Widget child})
+      : super(child: child);
+  final void Function(double h)? onSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _MeasureBox(onSize);
+
+  @override
+  void updateRenderObject(BuildContext context, covariant _MeasureBox ro) {
+    ro.onSize = onSize;
+  }
+}
+
+class _MeasureBox extends RenderProxyBox {
+  _MeasureBox(this.onSize);
+  void Function(double h)? onSize;
+  double _last = -1;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final h = size.height;
+    if ((h - _last).abs() > 0.5) {
+      _last = h;
+      final cb = onSize;
+      if (cb != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => cb(h));
+      }
+    }
+  }
 }
